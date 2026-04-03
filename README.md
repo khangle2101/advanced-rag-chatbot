@@ -171,14 +171,6 @@ This project is compatible with any OpenAI-compatible API. To use a different pr
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Screenshots
-
-### Chat Interface
-![Chat Interface](screenshots/chat.png)
-
-### Document Management
-![Document Management](screenshots/documents.png)
-
 ## License
 
 MIT License - feel free to use this project for learning or as a starting point for your own RAG applications.
