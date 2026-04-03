@@ -1,0 +1,24 @@
+# AI Internal Knowledge Assistant
+# Python Dependencies
+
+# Web Framework
+gradio>=4.0.0
+
+# LLM & AI
+openai>=1.0.0
+sentence-transformers>=2.2.0
+
+# Vector Database
+chromadb>=0.4.0
+
+# Data Validation
+pydantic>=2.0.0
+
+# Environment Variables
+python-dotenv>=1.0.0
+
+# Progress Bar
+tqdm>=4.65.0
+
+# HTTP Requests (for alternative API providers)
+requests>=2.28.0
