@@ -7,12 +7,12 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python" alt="Python" />
-  <img src="https://img.shields.io/badge/Gradio-UI-orange?style=flat-square" alt="Gradio" />
-  <img src="https://img.shields.io/badge/ChromaDB-Vector%20DB-brightgreen?style=flat-square" alt="ChromaDB" />
-  <img src="https://img.shields.io/badge/RAG-Advanced-purple?style=flat-square" alt="Advanced RAG" />
-  <img src="https://img.shields.io/badge/Embeddings-HuggingFace-yellow?style=flat-square" alt="Embeddings" />
-  <img src="https://img.shields.io/badge/API-OpenAI%20Compatible-black?style=flat-square" alt="OpenAI Compatible API" />
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python" alt="Python" />
+  <img src="https://img.shields.io/badge/Gradio-UI-orange?style=for-the-badge" alt="Gradio" />
+  <img src="https://img.shields.io/badge/ChromaDB-Vector%20DB-brightgreen?style=for-the-badge" alt="ChromaDB" />
+  <img src="https://img.shields.io/badge/RAG-Advanced-purple?style=for-the-badge" alt="Advanced RAG" />
+  <img src="https://img.shields.io/badge/Embeddings-HuggingFace-yellow?style=for-the-badge" alt="Embeddings" />
+  <img src="https://img.shields.io/badge/API-OpenAI%20Compatible-black?style=for-the-badge" alt="OpenAI Compatible API" />
 </p>
 
 A portfolio project that turns a fictional company's internal documents into an AI assistant using an advanced RAG pipeline.
