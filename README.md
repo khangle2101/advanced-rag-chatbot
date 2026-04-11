@@ -1,59 +1,148 @@
 # AI Internal Knowledge Assistant
 
-A RAG (Retrieval-Augmented Generation) chatbot for internal company knowledge management. Built as a portfolio project demonstrating advanced RAG techniques.
+A portfolio project that turns a fictional company's internal documents into an AI assistant using an advanced RAG pipeline.
 
-## Demo Video
+This project goes beyond a basic chatbot by combining semantic chunking, vector retrieval, query rewriting, multi-query retrieval, LLM re-ranking, and incremental document management in a single end-to-end application.
 
-[![Demo Video](https://img.shields.io/badge/YouTube-Watch_Demo-red?style=for-the-badge&logo=youtube)](https://www.youtube.com/watch?v=Sxkf9a6Gkrs)
+## Why This Project Matters
 
-[Watch the full demo on YouTube](https://www.youtube.com/watch?v=Sxkf9a6Gkrs)
+Many RAG demos stop at: embed documents -> retrieve top chunks -> answer.
 
-## Features
+This project is designed to be closer to a real internal AI tool:
 
-### Chat Interface
-- Natural language Q&A with company knowledge base
-- Conversation history support
-- Quick question examples
+- document ingestion with LLM-based semantic chunking
+- advanced retrieval with query rewriting and re-ranking
+- local embeddings for lower cost
+- admin-style document upload and deletion
+- modular code structure for ingestion, retrieval, and UI
 
-### Advanced RAG Pipeline
-- **Query Rewriting**: Reformulates user questions for better retrieval
-- **Multi-Query Retrieval**: Uses both original and rewritten queries for higher recall
-- **LLM Re-Ranking**: Reorders retrieved chunks by relevance for higher precision
+It demonstrates the kind of thinking needed for AI product development: balancing quality, cost, maintainability, and user workflow.
 
-### Document Management (Admin Protected)
-- Upload new documents (.md, .txt)
-- Incremental ingestion (no full re-indexing needed)
-- View all documents in knowledge base
-- Delete documents
-- Password-protected admin panel
+## What The App Does
+
+- answers questions over a fictional internal knowledge base
+- uses conversation history during Q&A
+- lets an admin upload new `.md` and `.txt` files
+- supports incremental ingestion without rebuilding the full vector database
+- allows listing and deleting indexed documents
+
+## Core Techniques Used
+
+### 1. Semantic Chunking
+
+Instead of splitting documents only by character count, the ingestion pipeline uses an LLM to create chunks with:
+
+- a short headline
+- a compact summary
+- the original text
+
+This gives each chunk stronger semantic structure for retrieval.
+
+### 2. Query Rewriting
+
+User questions are often vague or conversational. Before retrieval, the system rewrites the question into a more search-friendly form.
+
+Example:
+
+- user question: `What do you offer?`
+- rewritten query: `List company products and services`
+
+This improves recall.
+
+### 3. Multi-Query Retrieval
+
+The system retrieves with both:
+
+- the original user question
+- the rewritten query
+
+Then it merges and deduplicates the results.
+
+This reduces the chance of missing useful chunks.
+
+### 4. LLM Re-Ranking
+
+Vector similarity is useful, but it does not always produce the best final ranking.
+
+After retrieval, the system asks an LLM to re-rank the candidate chunks based on actual relevance to the question.
+
+This improves precision before answer generation.
+
+### 5. Incremental Document Management
+
+New files can be uploaded and indexed without reprocessing the full knowledge base.
+
+This is handled through a document manager module and exposed through the Gradio UI.
+
+## Architecture
+
+```text
+knowledge-base/ documents
+        |
+        v
+src/ingest.py
+  - load files
+  - semantic chunking
+  - local embeddings
+  - store in ChromaDB
+        |
+        v
+preprocessed_db/
+        |
+        v
+src/answer.py
+  - rewrite query
+  - retrieve original query
+  - retrieve rewritten query
+  - merge results
+  - rerank chunks
+  - generate final answer
+        |
+        v
+app.py
+  - chat UI
+  - admin upload/delete UI
+```
+
+## Project Structure
+
+```text
+├── app.py
+├── src/
+│   ├── answer.py
+│   ├── ingest.py
+│   └── document_manager.py
+├── knowledge-base/
+├── preprocessed_db/          # auto-generated
+├── .env.example
+├── .gitignore
+├── requirements.txt
+└── README.md
+```
 
 ## Tech Stack
 
 | Component | Technology |
 |-----------|------------|
-| LLM | Any OpenAI-compatible API |
-| Embeddings | HuggingFace `sentence-transformers/all-MiniLM-L6-v2` (local, free) |
+| Application UI | Gradio |
+| LLM API | OpenAI-compatible API |
+| Embeddings | HuggingFace `sentence-transformers/all-MiniLM-L6-v2` |
 | Vector Database | ChromaDB |
-| Web Framework | Gradio |
-| Language | Python 3.10+ |
+| Validation | Pydantic |
+| Language | Python |
 
-## Project Structure
+## Skills Demonstrated
 
-```
-├── app.py                    # Main Gradio web application
-├── src/
-│   ├── answer.py             # Advanced RAG answer generation
-│   ├── ingest.py             # Document ingestion with LLM chunking
-│   └── document_manager.py   # Document CRUD operations
-├── knowledge-base/           # Source documents (markdown)
-│   ├── company/
-│   ├── products/
-│   └── ...
-├── preprocessed_db/          # ChromaDB storage (auto-generated)
-├── .env.example              # Environment variables template
-├── requirements.txt          # Python dependencies
-└── README.md
-```
+This project demonstrates hands-on ability in:
+
+- LLM application development
+- retrieval-augmented generation
+- prompt design for chunking and rewriting
+- vector search and semantic retrieval
+- ranking and answer quality improvement
+- Python backend organization
+- lightweight AI product UI design
+- document ingestion workflows
 
 ## Quick Start
 
@@ -64,7 +153,7 @@ git clone https://github.com/YOUR_USERNAME/ai-knowledge-assistant.git
 cd ai-knowledge-assistant
 ```
 
-### 2. Create virtual environment
+### 2. Create a virtual environment
 
 ```bash
 python -m venv venv
@@ -83,30 +172,29 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edit .env with your API keys
 ```
 
-### 5. Prepare knowledge base
+Then edit `.env` with your provider settings.
 
-Add your markdown documents to the `knowledge-base/` folder, organized by type:
+### 5. Add or review knowledge base documents
 
-```
+Put your markdown files under `knowledge-base/`, for example:
+
+```text
 knowledge-base/
 ├── company/
-│   └── about.md
 ├── products/
-│   └── product1.md
-└── policies/
-    └── hr-policy.md
+├── policies/
+└── contracts/
 ```
 
-### 6. Ingest documents
+### 6. Build the vector database
 
 ```bash
 python -m src.ingest
 ```
 
-### 7. Run the application
+### 7. Run the app
 
 ```bash
 python app.py
@@ -114,67 +202,59 @@ python app.py
 
 Open `http://127.0.0.1:7860` in your browser.
 
-## Configuration
+## Environment Variables
 
-### Environment Variables
+| Variable | Purpose | Required |
+|----------|---------|----------|
+| `OPENAI_API_KEY` | API key for your OpenAI-compatible provider | Yes |
+| `OPENAI_BASE_URL` | Provider endpoint URL | No |
+| `ANSWER_MODEL` | Model used for final answer generation | No |
+| `REWRITE_MODEL` | Model used for query rewriting | No |
+| `RERANK_MODEL` | Model used for re-ranking chunks | No |
+| `CHUNKING_MODEL` | Model used during ingestion chunking | No |
+| `ADMIN_PASSWORD` | Password for document management UI | Yes |
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OPENAI_API_KEY` | Your OpenAI API key | Required |
-| `OPENAI_BASE_URL` | API endpoint URL | `https://api.openai.com/v1` |
-| `ANSWER_MODEL` | Model for generating answers | `gpt-4o` |
-| `REWRITE_MODEL` | Model for query rewriting | `gpt-4o-mini` |
-| `RERANK_MODEL` | Model for re-ranking | `gpt-4o-mini` |
-| `CHUNKING_MODEL` | Model for document chunking | `gpt-4o-mini` |
-| `ADMIN_PASSWORD` | Password for document management | Required |
+## Engineering Decisions
 
-### Using Alternative API Providers
+### Why local embeddings?
 
-This project is compatible with any OpenAI-compatible API. The same provider can be used for semantic chunking, query rewriting, re-ranking, and final answer generation.
+I use local HuggingFace embeddings to reduce recurring API cost while still getting solid retrieval quality for a portfolio-scale knowledge base.
 
-To use a different provider:
+### Why separate ingestion from answering?
 
-1. Set `OPENAI_BASE_URL` to your provider's endpoint
-2. Set `OPENAI_API_KEY` to your provider's API key
-3. Update model names to match your provider's available models
+Because they solve different problems:
 
-## RAG Architecture
+- ingestion prepares and structures knowledge
+- answering focuses on retrieval quality and response generation
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     User Question                            │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   1. Query Rewriting                         │
-│         "What insurance do you have?" →                      │
-│         "List available insurance products"                  │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│               2. Multi-Query Retrieval                       │
-│     Retrieve chunks using BOTH original + rewritten query    │
-│                    Merge & deduplicate                       │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    3. LLM Re-Ranking                         │
-│        Use LLM to reorder chunks by relevance                │
-│              Select top K most relevant                      │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  4. Answer Generation                        │
-│      Generate response using context + conversation          │
-└─────────────────────────────────────────────────────────────┘
-```
+This separation also makes the codebase easier to maintain and extend.
+
+### Why include document management?
+
+Because real AI tools are rarely static. Internal knowledge changes over time, so upload/delete flows are important for making the app feel closer to a practical internal product.
+
+## Example Questions
+
+- `What products does the company offer?`
+- `What is the company culture?`
+- `What are the employee benefits?`
+- `What information is available in the contracts folder?`
+
+## Future Improvements
+
+- source citations in the chat response
+- RAG evaluation dashboard
+- role-based access control
+- async/background ingestion jobs
+- hybrid search and metadata filtering
+- better observability for latency and retrieval quality
+
+## Notes
+
+- all data in this project is fictional
+- this repo is intended for learning, portfolio, and experimentation
+- the vector database is generated locally and should not be committed
 
 ## License
 
-MIT License - feel free to use this project for learning or as a starting point for your own RAG applications.
-
-*This project uses fictional data for demonstration purposes. All company names, employee information, and contracts are entirely fictional.*
+MIT License
