@@ -1,13 +1,12 @@
 """
 Advanced RAG Answer Module
 ==========================
-Uses OpenAI-compatible API for intelligent question answering.
+Implements the retrieval and answer generation pipeline.
 
-Key Advanced Features:
-1. Query Rewriting - Reformulates user question for better retrieval
-2. Multi-Query Retrieval - Uses both original and rewritten queries
-3. LLM Re-Ranking - Uses LLM to reorder chunks by relevance
-
+Advanced techniques:
+1. Query rewriting
+2. Multi-query retrieval
+3. LLM re-ranking
 """
 
 import os
@@ -23,35 +22,27 @@ import json
 load_dotenv(override=True)
 
 # ============ CONFIGURATION ============
-# API Configuration - set these in .env file
 API_KEY = os.getenv("OPENAI_API_KEY")
 API_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
-# Initialize OpenAI client
 client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL)
 
-# Model selection - customize based on your API provider
 REWRITE_MODEL = os.getenv("REWRITE_MODEL", "gpt-4o-mini")
 RERANK_MODEL = os.getenv("RERANK_MODEL", "gpt-4o-mini")
 ANSWER_MODEL = os.getenv("ANSWER_MODEL", "gpt-4o")
 
-# Database paths
-DB_NAME = str(Path(__file__).parent.parent / "vector_db")
-COLLECTION_NAME = "knowledge_base"
+DB_NAME = str(Path(__file__).parent.parent / "preprocessed_db")
+COLLECTION_NAME = "docs_advanced"
 
-# Embedding model (local HuggingFace - free!)
 EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
-# Retrieval parameters
-RETRIEVAL_K = 20  # How many chunks to retrieve initially
-FINAL_K = 10  # How many chunks to use after re-ranking
+RETRIEVAL_K = 20
+FINAL_K = 10
 
-# Initialize models
-print("Loading embedding model...")
+print("Loading HuggingFace embedding model...")
 embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
 print(f"Embedding model loaded: {EMBEDDING_MODEL_NAME}")
 
-# Initialize ChromaDB
 chroma = PersistentClient(path=DB_NAME)
 collection = chroma.get_or_create_collection(COLLECTION_NAME)
 print(f"ChromaDB loaded: {collection.count()} documents in collection")
@@ -59,69 +50,54 @@ print(f"ChromaDB loaded: {collection.count()} documents in collection")
 
 # ============ DATA MODELS ============
 class Result(BaseModel):
-    """A retrieved document chunk"""
-
     page_content: str
     metadata: dict
 
 
 class RankOrder(BaseModel):
-    """Output from re-ranking: ordered list of chunk IDs"""
-
     order: list[int] = Field(
-        description="The order of relevance of chunks, from most relevant to least relevant"
+        description="Chunk ids ordered from most relevant to least relevant"
     )
 
 
 # ============ SYSTEM PROMPT ============
-SYSTEM_PROMPT = """You are a knowledgeable, friendly assistant for the company.
-Your answer will be evaluated for accuracy, relevance and completeness.
-If you don't know the answer, say so.
+SYSTEM_PROMPT = """You are a knowledgeable, friendly assistant representing a fictional company used in a portfolio demo.
+Your answer will be evaluated for accuracy, relevance and completeness, so answer only with information supported by context.
+If you do not know the answer, say so.
 
-For context, here are specific extracts from the Knowledge Base:
+For context, here are specific extracts from the knowledge base:
 
 {context}
 
 With this context, please answer the user's question. Be accurate, relevant and complete."""
 
 
-# ============ API CALLS ============
-def call_llm(
-    messages: list[dict],
-    model: str,
-    temperature: float = 0.7,
-) -> str:
-    """Call LLM API using OpenAI-compatible endpoint."""
+def call_llm(messages: list[dict], model: str, temperature: float = 0.7) -> str:
     try:
         response = client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
         )
-        return response.choices[0].message.content
+        return response.choices[0].message.content or ""
     except Exception as e:
         print(f"API Error: {e}")
         raise
 
 
 # ============ ADVANCED RAG TECHNIQUES ============
-
-
 def rewrite_query(question: str, history: list = []) -> str:
-    """
-    TECHNIQUE 1: Query Rewriting
-    Rewrites vague/conversational questions into precise search queries.
-    """
-    prompt = f"""You are about to look up information in a Knowledge Base.
+    prompt = f"""You are in a conversation with a user about a fictional company.
+You are about to search a knowledge base.
 
-This is the conversation history:
+Conversation history:
 {history}
 
-And this is the user's current question:
+Current user question:
 {question}
 
-Respond only with a short, refined question for searching the Knowledge Base.
-IMPORTANT: Respond ONLY with the precise query, nothing else."""
+Respond only with a short, refined search query that is most likely to surface useful knowledge base content.
+Return only the query text."""
 
     response = call_llm(
         messages=[{"role": "user", "content": prompt}],
@@ -135,11 +111,10 @@ IMPORTANT: Respond ONLY with the precise query, nothing else."""
 
 
 def fetch_context_unranked(question: str) -> list[Result]:
-    """Retrieve chunks from vector database using embedding similarity."""
     query_embedding = embedding_model.encode([question])[0].tolist()
-
     results = collection.query(
-        query_embeddings=[query_embedding], n_results=RETRIEVAL_K
+        query_embeddings=[query_embedding],
+        n_results=RETRIEVAL_K,
     )
 
     chunks = []
@@ -151,10 +126,6 @@ def fetch_context_unranked(question: str) -> list[Result]:
 
 
 def merge_chunks(chunks1: list[Result], chunks2: list[Result]) -> list[Result]:
-    """
-    TECHNIQUE 2: Multi-Query Retrieval
-    Merge chunks from original + rewritten queries, removing duplicates.
-    """
     merged = chunks1[:]
     existing_contents = [chunk.page_content for chunk in chunks1]
 
@@ -167,17 +138,12 @@ def merge_chunks(chunks1: list[Result], chunks2: list[Result]) -> list[Result]:
 
 
 def rerank(question: str, chunks: list[Result]) -> list[Result]:
-    """
-    TECHNIQUE 3: LLM Re-Ranking
-    Use LLM to reorder chunks by actual relevance to the question.
-    """
     system_prompt = """You are a document re-ranker.
-You must rank order the provided chunks by relevance to the question.
-Reply only with valid JSON: {"order": [1, 3, 2, 5, 4, ...]}
-Include ALL chunk ids, reranked from most to least relevant."""
+You are given a question and a list of text chunks from a knowledge base.
+Rank all chunks from most relevant to least relevant.
+Reply only with valid JSON: {"order": [1, 3, 2, ...]}"""
 
     user_prompt = f"Question: {question}\n\nRank these chunks by relevance:\n\n"
-
     for index, chunk in enumerate(chunks):
         content = (
             chunk.page_content[:400] + "..."
@@ -217,50 +183,33 @@ Include ALL chunk ids, reranked from most to least relevant."""
 
         print(f"  [Re-rank] Reordered {len(reranked)} chunks")
         return reranked
-
     except Exception as e:
         print(f"  [Re-rank] Failed: {e}, using original order")
         return chunks
 
 
 def fetch_context(original_question: str) -> list[Result]:
-    """
-    Full Advanced RAG Retrieval Pipeline:
-    1. Query Rewriting -> Better search query
-    2. Multi-Query Retrieval -> Higher recall
-    3. LLM Re-Ranking -> Higher precision
-    """
     print("\n--- Advanced Retrieval Pipeline ---")
 
-    # Step 1: Rewrite the query
     rewritten_question = rewrite_query(original_question)
 
-    # Step 2: Retrieve with both queries
     print("  [Retrieve] Fetching chunks...")
     chunks_original = fetch_context_unranked(original_question)
     chunks_rewritten = fetch_context_unranked(rewritten_question)
 
-    # Step 3: Merge results
     merged_chunks = merge_chunks(chunks_original, chunks_rewritten)
-
-    # Step 4: Re-rank by relevance
     reranked_chunks = rerank(original_question, merged_chunks)
 
-    # Return top K
     final_chunks = reranked_chunks[:FINAL_K]
     print(f"  [Final] Using top {len(final_chunks)} chunks")
     print("--- Pipeline Complete ---\n")
-
     return final_chunks
 
 
 # ============ ANSWER GENERATION ============
-
-
 def make_rag_messages(
     question: str, history: list[dict], chunks: list[Result]
 ) -> list[dict]:
-    """Build the messages for the final answer generation."""
     context_parts = []
     for chunk in chunks:
         source = chunk.metadata.get("source", "unknown")
@@ -272,43 +221,29 @@ def make_rag_messages(
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(history)
     messages.append({"role": "user", "content": question})
-
     return messages
 
 
 def answer_question(
     question: str, history: list[dict] = []
 ) -> tuple[str, list[Result]]:
-    """
-    Main entry point: Answer a question using Advanced RAG.
-
-    Returns:
-    - answer: The generated response
-    - chunks: The context used (for transparency)
-    """
-    # Step 1: Advanced retrieval
     chunks = fetch_context(question)
-
-    # Step 2: Generate answer
     messages = make_rag_messages(question, history, chunks)
 
     print(f"[Generating answer with {ANSWER_MODEL}...]")
     answer = call_llm(messages=messages, model=ANSWER_MODEL, temperature=0.7)
-
     return answer, chunks
 
 
-# ============ TESTING ============
 if __name__ == "__main__":
     print("=" * 60)
-    print("ADVANCED RAG ANSWER MODULE")
+    print("ADVANCED RAG ANSWER")
     print("=" * 60)
     print(f"Rewrite Model: {REWRITE_MODEL}")
     print(f"Rerank Model: {RERANK_MODEL}")
     print(f"Answer Model: {ANSWER_MODEL}")
     print("=" * 60)
 
-    # Test question
     test_q = "What products does the company offer?"
     print(f"\nTesting: {test_q}\n")
 

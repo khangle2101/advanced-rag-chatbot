@@ -31,7 +31,7 @@ A RAG (Retrieval-Augmented Generation) chatbot for internal company knowledge ma
 
 | Component | Technology |
 |-----------|------------|
-| LLM | OpenAI API (compatible with any OpenAI-compatible API) |
+| LLM | Any OpenAI-compatible API |
 | Embeddings | HuggingFace `sentence-transformers/all-MiniLM-L6-v2` (local, free) |
 | Vector Database | ChromaDB |
 | Web Framework | Gradio |
@@ -49,7 +49,7 @@ A RAG (Retrieval-Augmented Generation) chatbot for internal company knowledge ma
 │   ├── company/
 │   ├── products/
 │   └── ...
-├── vector_db/                # ChromaDB storage (auto-generated)
+├── preprocessed_db/          # ChromaDB storage (auto-generated)
 ├── .env.example              # Environment variables template
 ├── requirements.txt          # Python dependencies
 └── README.md
@@ -112,7 +112,7 @@ python -m src.ingest
 python app.py
 ```
 
-Open http://127.0.0.1:7860 in your browser.
+Open `http://127.0.0.1:7860` in your browser.
 
 ## Configuration
 
@@ -130,7 +130,9 @@ Open http://127.0.0.1:7860 in your browser.
 
 ### Using Alternative API Providers
 
-This project is compatible with any OpenAI-compatible API. To use a different provider:
+This project is compatible with any OpenAI-compatible API. The same provider can be used for semantic chunking, query rewriting, re-ranking, and final answer generation.
+
+To use a different provider:
 
 1. Set `OPENAI_BASE_URL` to your provider's endpoint
 2. Set `OPENAI_API_KEY` to your provider's API key

@@ -34,6 +34,7 @@ env/
 # Vector database (auto-generated)
 vector_db/
 chroma_db/
+preprocessed_db/
 *.db
 
 # IDE
