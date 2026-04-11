@@ -19,6 +19,13 @@ A portfolio project that turns a fictional company's internal documents into an 
 
 This project goes beyond a basic chatbot by combining semantic chunking, vector retrieval, query rewriting, multi-query retrieval, LLM re-ranking, and incremental document management in a single end-to-end application.
 
+## Project Highlights
+
+- Built an end-to-end advanced RAG application with ingestion, retrieval, re-ranking, and UI
+- Implemented query rewriting and multi-query retrieval to improve answer quality
+- Added admin-style document upload and deletion for a more realistic internal AI workflow
+- Used local embeddings with an OpenAI-compatible API to balance cost and performance
+
 ## Demo
 
 - Video demo: `https://www.youtube.com/watch?v=Sxkf9a6Gkrs`
