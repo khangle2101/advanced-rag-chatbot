@@ -9,7 +9,6 @@ Web interface for:
 Run: python app.py
 URL: http://127.0.0.1:7860
 
-Author: Khang Le
 """
 
 import os
@@ -23,8 +22,8 @@ from src.document_manager import (
 )
 
 # Admin password for document management (upload/delete)
-# Set via environment variable for security
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+# Must be provided via environment variable before enabling admin actions.
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 
 # ============ CUSTOM CSS ============
@@ -117,7 +116,7 @@ def chat(message: str, history: list) -> str:
 # ============ DOCUMENT MANAGEMENT FUNCTIONS ============
 def verify_password(password: str) -> bool:
     """Verify admin password."""
-    return password == ADMIN_PASSWORD
+    return bool(ADMIN_PASSWORD) and password == ADMIN_PASSWORD
 
 
 def handle_upload(file, doc_type):
@@ -291,7 +290,7 @@ def create_demo():
                     gr.Markdown("### Admin Authentication Required")
                     gr.Markdown(
                         "This section contains sensitive document management functions. "
-                        "Please enter the admin password to continue."
+                        "Set the `ADMIN_PASSWORD` environment variable, then enter it here to continue."
                     )
 
                     with gr.Row():
@@ -369,6 +368,15 @@ def create_demo():
 
                 # ===== EVENT HANDLERS =====
                 def handle_unlock(password):
+                    if not ADMIN_PASSWORD:
+                        return (
+                            gr.Column(visible=True),
+                            gr.Column(visible=False),
+                            "**Admin access is disabled.** Set `ADMIN_PASSWORD` in your environment to enable document management.",
+                            gr.update(),
+                            gr.update(),
+                            gr.update(),
+                        )
                     if verify_password(password):
                         return (
                             gr.Column(visible=False),
@@ -458,7 +466,7 @@ def create_demo():
                 <p><strong>AI Internal Knowledge Assistant</strong></p>
                 <div class="footer-demo">
                     <p style="font-size: 0.75rem; color: #718096; margin: 0;">
-                        <strong>Portfolio Project</strong> by Khang Le | 
+                        <strong>Portfolio Project</strong> |
                         Built with RAG, ChromaDB & Gradio
                     </p>
                 </div>

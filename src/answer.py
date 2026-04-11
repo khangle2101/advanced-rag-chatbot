@@ -8,7 +8,6 @@ Key Advanced Features:
 2. Multi-Query Retrieval - Uses both original and rewritten queries
 3. LLM Re-Ranking - Uses LLM to reorder chunks by relevance
 
-Author: Khang Le
 """
 
 import os

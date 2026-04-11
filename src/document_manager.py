@@ -9,7 +9,6 @@ Features:
 2. List all documents in knowledge base
 3. Delete document from knowledge base
 
-Author: Khang Le
 """
 
 import os

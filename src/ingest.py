@@ -9,7 +9,6 @@ Process:
 3. Create embeddings using HuggingFace model
 4. Store in ChromaDB vector database
 
-Author: Khang Le
 """
 
 from pathlib import Path

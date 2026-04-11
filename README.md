@@ -126,7 +126,7 @@ Open http://127.0.0.1:7860 in your browser.
 | `REWRITE_MODEL` | Model for query rewriting | `gpt-4o-mini` |
 | `RERANK_MODEL` | Model for re-ranking | `gpt-4o-mini` |
 | `CHUNKING_MODEL` | Model for document chunking | `gpt-4o-mini` |
-| `ADMIN_PASSWORD` | Password for document management | `admin123` |
+| `ADMIN_PASSWORD` | Password for document management | Required |
 
 ### Using Alternative API Providers
 
@@ -174,13 +174,5 @@ This project is compatible with any OpenAI-compatible API. To use a different pr
 ## License
 
 MIT License - feel free to use this project for learning or as a starting point for your own RAG applications.
-
-## Author
-
-**Khang Le**
-- Portfolio project for demonstrating RAG technology
-- Built with knowledge from LLM Engineering courses
-
----
 
 *This project uses fictional data for demonstration purposes. All company names, employee information, and contracts are entirely fictional.*
