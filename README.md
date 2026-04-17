@@ -120,29 +120,31 @@ The latest `Advanced RAG` run in this project achieved:
 
 #### Retrieval Evaluation
 
-<table>
-  <tr>
-    <td align="center"><strong>LangChain</strong></td>
-    <td align="center"><strong>Advanced RAG</strong></td>
-  </tr>
-  <tr>
-    <td><img src="assets/evaluation/langchain-retrieval.jpg" alt="LangChain Retrieval Evaluation" width="100%" /></td>
-    <td><img src="assets/evaluation/advanced-rag-retrieval.jpg" alt="Advanced RAG Retrieval Evaluation" width="100%" /></td>
-  </tr>
-</table>
+**LangChain - Retrieval**
+
+<img src="assets/evaluation/langchain-retrieval.jpg" alt="LangChain Retrieval Evaluation" width="100%" />
+
+<p align="center"><em>Baseline retrieval performance using LangChain similarity search.</em></p>
+
+**Advanced RAG - Retrieval**
+
+<img src="assets/evaluation/advanced-rag-retrieval.jpg" alt="Advanced RAG Retrieval Evaluation" width="100%" />
+
+<p align="center"><em>Advanced RAG retrieval performance after query rewriting, multi-query retrieval, and LLM re-ranking.</em></p>
 
 #### Answer Evaluation
 
-<table>
-  <tr>
-    <td align="center"><strong>LangChain</strong></td>
-    <td align="center"><strong>Advanced RAG</strong></td>
-  </tr>
-  <tr>
-    <td><img src="assets/evaluation/langchain-answer.jpg" alt="LangChain Answer Evaluation" width="100%" /></td>
-    <td><img src="assets/evaluation/advanced-rag-answer.jpg" alt="Advanced RAG Answer Evaluation" width="100%" /></td>
-  </tr>
-</table>
+**LangChain - Answer**
+
+<img src="assets/evaluation/langchain-answer.jpg" alt="LangChain Answer Evaluation" width="100%" />
+
+<p align="center"><em>Baseline answer quality from the LangChain implementation.</em></p>
+
+**Advanced RAG - Answer**
+
+<img src="assets/evaluation/advanced-rag-answer.jpg" alt="Advanced RAG Answer Evaluation" width="100%" />
+
+<p align="center"><em>Answer quality from the Advanced RAG pipeline after retrieval tuning and evaluation-driven iteration.</em></p>
 
 ### What Improved the Most
 
