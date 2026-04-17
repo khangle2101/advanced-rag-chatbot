@@ -1,37 +1,37 @@
-"""
-Advanced RAG Ingest Module
-==========================
-Builds the vector database used by the chatbot.
+"""Advanced RAG ingestion pipeline.
 
+Builds the ChromaDB vector store used by the public Advanced RAG demo.
 Pipeline:
 1. Load markdown documents from `knowledge-base/`
-2. Use an OpenAI-compatible model for semantic chunking
-3. Create local embeddings with HuggingFace
+2. Use OpenRouter for semantic chunking
+3. Create OpenAI embeddings via OpenRouter
 4. Store chunks and vectors in ChromaDB
 """
 
-from pathlib import Path
-import os
-from openai import OpenAI
-from dotenv import load_dotenv
-from pydantic import BaseModel, Field
-from chromadb import PersistentClient
-from tqdm import tqdm
-from sentence_transformers import SentenceTransformer
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from __future__ import annotations
+
 import json
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+
+from chromadb import PersistentClient
+from dotenv import load_dotenv
+from openai import OpenAI
+from pydantic import BaseModel, Field
+from tqdm import tqdm
 
 
 load_dotenv(override=True)
 
-# ============ CONFIGURATION ============
-API_KEY = os.getenv("OPENAI_API_KEY")
-API_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-CHUNKING_MODEL = os.getenv("CHUNKING_MODEL", "gpt-4o-mini")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 
-client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL)
+if not OPENROUTER_API_KEY:
+    raise ValueError("OPENROUTER_API_KEY is required. Add it to your .env file.")
 
-EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+CHUNKING_MODEL = os.getenv("CHUNKING_MODEL", "openai/gpt-4.1")
+EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "openai/text-embedding-3-large")
 
 DB_NAME = str(Path(__file__).parent.parent / "preprocessed_db")
 COLLECTION_NAME = "docs_advanced"
@@ -39,13 +39,12 @@ KNOWLEDGE_BASE_PATH = Path(__file__).parent.parent / "knowledge-base"
 
 AVERAGE_CHUNK_SIZE = 100
 MAX_WORKERS = 5
+EMBED_BATCH_SIZE = 100
 
-print("Loading HuggingFace embedding model...")
-embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
-print(f"Embedding model loaded: {EMBEDDING_MODEL_NAME}")
+client = OpenAI(api_key=OPENROUTER_API_KEY, base_url=OPENROUTER_BASE_URL)
+embedding_client = OpenAI(api_key=OPENROUTER_API_KEY, base_url=OPENROUTER_BASE_URL)
 
 
-# ============ DATA MODELS ============
 class Result(BaseModel):
     page_content: str
     metadata: dict
@@ -72,31 +71,28 @@ class Chunks(BaseModel):
     chunks: list[Chunk]
 
 
-# ============ DOCUMENT LOADING ============
 def fetch_documents() -> list[dict]:
-    documents = []
+    documents: list[dict] = []
 
     for folder in KNOWLEDGE_BASE_PATH.iterdir():
         if not folder.is_dir():
             continue
         doc_type = folder.name
         for file in folder.rglob("*.md"):
-            with open(file, "r", encoding="utf-8") as f:
+            with open(file, "r", encoding="utf-8") as handle:
                 documents.append(
-                    {"type": doc_type, "source": file.as_posix(), "text": f.read()}
+                    {"type": doc_type, "source": file.as_posix(), "text": handle.read()}
                 )
 
     print(f"Loaded {len(documents)} documents")
     return documents
 
 
-# ============ LLM-BASED SEMANTIC CHUNKING ============
 def make_chunking_prompt(document: dict) -> str:
     how_many = max(1, len(document["text"]) // AVERAGE_CHUNK_SIZE)
-
     return f"""You take a document and split it into overlapping chunks for a KnowledgeBase.
 
-The document belongs to a fictional company used for a portfolio demo.
+The document is from the shared drive of a fictional company called Insurellm.
 Document type: {document["type"]}
 Document source: {document["source"]}
 
@@ -130,11 +126,10 @@ def call_llm(prompt: str, max_retries: int = 3) -> str:
                 temperature=0.3,
             )
             return response.choices[0].message.content or ""
-        except Exception as e:
-            print(f"Attempt {attempt + 1} failed: {e}")
+        except Exception as exc:
+            print(f"Chunking attempt {attempt + 1} failed: {exc}")
             if attempt == max_retries - 1:
                 raise
-
     return ""
 
 
@@ -158,14 +153,13 @@ def extract_json_from_response(response: str) -> dict:
 
 def process_document(document: dict) -> list[Result]:
     prompt = make_chunking_prompt(document)
-
     try:
         response = call_llm(prompt)
         json_data = extract_json_from_response(response)
         chunks = Chunks.model_validate(json_data)
         return [chunk.as_result(document) for chunk in chunks.chunks]
-    except Exception as e:
-        print(f"Error processing {document['source']}: {e}")
+    except Exception as exc:
+        print(f"Error processing {document['source']}: {exc}")
         return [
             Result(
                 page_content=document["text"],
@@ -175,79 +169,77 @@ def process_document(document: dict) -> list[Result]:
 
 
 def create_chunks_parallel(documents: list[dict]) -> list[Result]:
-    all_chunks = []
-
-    print(
-        f"Processing {len(documents)} documents with {MAX_WORKERS} parallel workers..."
-    )
+    all_chunks: list[Result] = []
+    print(f"Processing {len(documents)} documents with {MAX_WORKERS} workers...")
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         future_to_doc = {
             executor.submit(process_document, doc): doc for doc in documents
         }
-
         for future in tqdm(
             as_completed(future_to_doc),
             total=len(documents),
             desc="Creating semantic chunks",
         ):
             try:
-                chunks = future.result()
-                all_chunks.extend(chunks)
-            except Exception as e:
+                all_chunks.extend(future.result())
+            except Exception as exc:
                 doc = future_to_doc[future]
-                print(f"Failed to process {doc['source']}: {e}")
+                print(f"Failed to process {doc['source']}: {exc}")
 
     print(f"Created {len(all_chunks)} chunks from {len(documents)} documents")
     return all_chunks
 
 
-# ============ EMBEDDING & STORAGE ============
-def create_embeddings(chunks: list[Result]):
-    print("Creating ChromaDB vector store...")
-
+def create_embeddings(chunks: list[Result]) -> None:
+    print("Creating vector store...")
     chroma = PersistentClient(path=DB_NAME)
 
-    existing_collections = [c.name for c in chroma.list_collections()]
+    existing_collections = [collection.name for collection in chroma.list_collections()]
     if COLLECTION_NAME in existing_collections:
         chroma.delete_collection(COLLECTION_NAME)
         print(f"Deleted existing collection: {COLLECTION_NAME}")
 
     collection = chroma.get_or_create_collection(COLLECTION_NAME)
-
     texts = [chunk.page_content for chunk in chunks]
 
-    print("Creating embeddings with HuggingFace model...")
-    vectors = embedding_model.encode(texts, show_progress_bar=True).tolist()
+    print(f"Creating embeddings with {EMBEDDING_MODEL_NAME}...")
+    embeddings: list[list[float]] = []
+    for index in tqdm(range(0, len(texts), EMBED_BATCH_SIZE), desc="Embedding chunks"):
+        batch = texts[index : index + EMBED_BATCH_SIZE]
+        response = embedding_client.embeddings.create(
+            model=EMBEDDING_MODEL_NAME, input=batch
+        )
+        embeddings.extend(item.embedding for item in response.data)
 
-    ids = [str(i) for i in range(len(chunks))]
+    ids = [str(index) for index in range(len(chunks))]
     metadatas = [chunk.metadata for chunk in chunks]
 
-    collection.add(ids=ids, embeddings=vectors, documents=texts, metadatas=metadatas)
-
-    print(f"Vector store created at: {DB_NAME}")
-    print(f"Collection '{COLLECTION_NAME}' has {collection.count()} documents")
+    collection.add(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadatas)
+    print(f"Stored {len(chunks)} chunks in ChromaDB")
 
 
-if __name__ == "__main__":
+def main() -> None:
     print("=" * 60)
     print("ADVANCED RAG INGEST")
     print("=" * 60)
+    print(f"Knowledge Base: {KNOWLEDGE_BASE_PATH}")
+    print(f"Vector Store: {DB_NAME}")
     print(f"Chunking Model: {CHUNKING_MODEL}")
     print(f"Embedding Model: {EMBEDDING_MODEL_NAME}")
-    print(f"Database: {DB_NAME}")
-    print(f"Parallel Workers: {MAX_WORKERS}")
     print("=" * 60)
 
     print("\n[1/3] Loading documents...")
     documents = fetch_documents()
 
-    print("\n[2/3] Creating semantic chunks...")
+    print("\n[2/3] Semantic chunking...")
     chunks = create_chunks_parallel(documents)
 
-    print("\n[3/3] Creating embeddings and storing...")
+    print("\n[3/3] Creating embeddings and vector store...")
     create_embeddings(chunks)
 
-    print("\n" + "=" * 60)
-    print("INGESTION COMPLETE")
-    print("=" * 60)
+    print("\nIngestion complete.")
+
+
+if __name__ == "__main__":
+    main()

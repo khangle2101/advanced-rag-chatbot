@@ -1,54 +1,52 @@
-"""
-Advanced RAG Answer Module
-==========================
-Implements the retrieval and answer generation pipeline.
+"""Advanced RAG answer pipeline.
 
-Advanced techniques:
+Implements the public retrieval and answer generation pipeline for the repo.
+Main techniques:
 1. Query rewriting
 2. Multi-query retrieval
 3. LLM re-ranking
+4. Streaming answer generation
 """
 
-import os
-from openai import OpenAI
-from dotenv import load_dotenv
-from chromadb import PersistentClient
-from pydantic import BaseModel, Field
-from pathlib import Path
-from sentence_transformers import SentenceTransformer
+from __future__ import annotations
+
 import json
+import os
+import time
+from pathlib import Path
+
+from chromadb import PersistentClient
+from dotenv import load_dotenv
+from openai import OpenAI
+from pydantic import BaseModel, Field
 
 
 load_dotenv(override=True)
 
-# ============ CONFIGURATION ============
-API_KEY = os.getenv("OPENAI_API_KEY")
-API_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 
-client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL)
+if not OPENROUTER_API_KEY:
+    raise ValueError("OPENROUTER_API_KEY is required. Add it to your .env file.")
 
-REWRITE_MODEL = os.getenv("REWRITE_MODEL", "gpt-4o-mini")
-RERANK_MODEL = os.getenv("RERANK_MODEL", "gpt-4o-mini")
-ANSWER_MODEL = os.getenv("ANSWER_MODEL", "gpt-4o")
+client = OpenAI(api_key=OPENROUTER_API_KEY, base_url=OPENROUTER_BASE_URL)
+embedding_client = OpenAI(api_key=OPENROUTER_API_KEY, base_url=OPENROUTER_BASE_URL)
+
+REWRITE_MODEL = os.getenv("REWRITE_MODEL", "openai/gpt-4.1-mini")
+RERANK_MODEL = os.getenv("RERANK_MODEL", "openai/gpt-4.1-mini")
+ANSWER_MODEL = os.getenv("ANSWER_MODEL", "openai/gpt-4.1")
+EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "openai/text-embedding-3-large")
 
 DB_NAME = str(Path(__file__).parent.parent / "preprocessed_db")
 COLLECTION_NAME = "docs_advanced"
 
-EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-
 RETRIEVAL_K = 20
 FINAL_K = 10
 
-print("Loading HuggingFace embedding model...")
-embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
-print(f"Embedding model loaded: {EMBEDDING_MODEL_NAME}")
-
 chroma = PersistentClient(path=DB_NAME)
 collection = chroma.get_or_create_collection(COLLECTION_NAME)
-print(f"ChromaDB loaded: {collection.count()} documents in collection")
 
 
-# ============ DATA MODELS ============
 class Result(BaseModel):
     page_content: str
     metadata: dict
@@ -60,38 +58,43 @@ class RankOrder(BaseModel):
     )
 
 
-# ============ SYSTEM PROMPT ============
-SYSTEM_PROMPT = """You are a knowledgeable, friendly assistant representing a fictional company used in a portfolio demo.
-Your answer will be evaluated for accuracy, relevance and completeness, so answer only with information supported by context.
-If you do not know the answer, say so.
+SYSTEM_PROMPT = """You are a knowledgeable, friendly assistant representing the fictional company Insurellm.
+Your answer will be evaluated for accuracy, relevance and completeness, so answer only with information supported by the provided context.
+If the context does not contain the answer, say so clearly.
 
-For context, here are specific extracts from the knowledge base:
-
+Context:
 {context}
 
-With this context, please answer the user's question. Be accurate, relevant and complete."""
+Answer the user's question accurately, directly, and completely."""
 
 
 def call_llm(messages: list[dict], model: str, temperature: float = 0.7) -> str:
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-        )
-        return response.choices[0].message.content or ""
-    except Exception as e:
-        print(f"API Error: {e}")
-        raise
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+    )
+    return response.choices[0].message.content or ""
 
 
-# ============ ADVANCED RAG TECHNIQUES ============
-def rewrite_query(question: str, history: list = []) -> str:
-    prompt = f"""You are in a conversation with a user about a fictional company.
+def call_llm_stream(messages: list[dict], model: str, temperature: float = 0.7):
+    stream = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        stream=True,
+    )
+    for chunk in stream:
+        if chunk.choices and chunk.choices[0].delta.content:
+            yield chunk.choices[0].delta.content
+
+
+def rewrite_query(question: str, history: list[dict] | None = None) -> str:
+    prompt = f"""You are in a conversation with a user about a fictional company called Insurellm.
 You are about to search a knowledge base.
 
 Conversation history:
-{history}
+{history or []}
 
 Current user question:
 {question}
@@ -99,29 +102,29 @@ Current user question:
 Respond only with a short, refined search query that is most likely to surface useful knowledge base content.
 Return only the query text."""
 
-    response = call_llm(
+    rewritten = call_llm(
         messages=[{"role": "user", "content": prompt}],
         model=REWRITE_MODEL,
         temperature=0.3,
-    )
-
-    rewritten = response.strip()
+    ).strip()
     print(f"  [Query Rewrite] '{question}' -> '{rewritten}'")
     return rewritten
 
 
 def fetch_context_unranked(question: str) -> list[Result]:
-    query_embedding = embedding_model.encode([question])[0].tolist()
+    response = embedding_client.embeddings.create(
+        model=EMBEDDING_MODEL_NAME, input=[question]
+    )
+    query_embedding = response.data[0].embedding
+
     results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=RETRIEVAL_K,
+        query_embeddings=[query_embedding], n_results=RETRIEVAL_K
     )
 
-    chunks = []
+    chunks: list[Result] = []
     if results["documents"] and results["metadatas"]:
         for doc, meta in zip(results["documents"][0], results["metadatas"][0]):
             chunks.append(Result(page_content=doc, metadata=dict(meta)))
-
     return chunks
 
 
@@ -140,19 +143,19 @@ def merge_chunks(chunks1: list[Result], chunks2: list[Result]) -> list[Result]:
 def rerank(question: str, chunks: list[Result]) -> list[Result]:
     system_prompt = """You are a document re-ranker.
 You are given a question and a list of text chunks from a knowledge base.
+The chunks are already approximately ordered by relevance, but you may improve that ordering.
 Rank all chunks from most relevant to least relevant.
 Reply only with valid JSON: {"order": [1, 3, 2, ...]}"""
 
-    user_prompt = f"Question: {question}\n\nRank these chunks by relevance:\n\n"
+    user_prompt = (
+        f"The user asked:\n\n{question}\n\n"
+        "Order all provided chunks from most relevant to least relevant.\n\n"
+        "Chunks:\n\n"
+    )
     for index, chunk in enumerate(chunks):
-        content = (
-            chunk.page_content[:400] + "..."
-            if len(chunk.page_content) > 400
-            else chunk.page_content
-        )
-        user_prompt += f"CHUNK {index + 1}:\n{content}\n\n"
+        user_prompt += f"# CHUNK ID: {index + 1}:\n\n{chunk.page_content}\n\n"
 
-    user_prompt += 'Reply with JSON only: {"order": [...]}'
+    user_prompt += 'Reply only with valid JSON: {"order": [...]}.'
 
     try:
         response = call_llm(
@@ -171,53 +174,48 @@ Reply only with valid JSON: {"order": [1, 3, 2, ...]}"""
             json_str = response[start:end]
 
         order = json.loads(json_str)["order"]
-
-        reranked = []
+        reranked: list[Result] = []
         for idx in order:
             if 1 <= idx <= len(chunks):
                 reranked.append(chunks[idx - 1])
 
-        for i, chunk in enumerate(chunks):
-            if (i + 1) not in order:
+        for index, chunk in enumerate(chunks):
+            if (index + 1) not in order:
                 reranked.append(chunk)
 
         print(f"  [Re-rank] Reordered {len(reranked)} chunks")
         return reranked
-    except Exception as e:
-        print(f"  [Re-rank] Failed: {e}, using original order")
+    except Exception as exc:
+        print(f"  [Re-rank] Failed: {exc}, using original order")
         return chunks
 
 
 def fetch_context(original_question: str) -> list[Result]:
+    pipeline_start = time.time()
     print("\n--- Advanced Retrieval Pipeline ---")
 
     rewritten_question = rewrite_query(original_question)
-
-    print("  [Retrieve] Fetching chunks...")
     chunks_original = fetch_context_unranked(original_question)
     chunks_rewritten = fetch_context_unranked(rewritten_question)
-
     merged_chunks = merge_chunks(chunks_original, chunks_rewritten)
     reranked_chunks = rerank(original_question, merged_chunks)
 
     final_chunks = reranked_chunks[:FINAL_K]
-    print(f"  [Final] Using top {len(final_chunks)} chunks")
+    print(
+        f"  [Final] Using top {len(final_chunks)} chunks ({time.time() - pipeline_start:.1f}s)"
+    )
     print("--- Pipeline Complete ---\n")
     return final_chunks
 
 
-# ============ ANSWER GENERATION ============
 def make_rag_messages(
     question: str, history: list[dict], chunks: list[Result]
 ) -> list[dict]:
-    context_parts = []
-    for chunk in chunks:
-        source = chunk.metadata.get("source", "unknown")
-        context_parts.append(f"Extract from {source}:\n{chunk.page_content}")
-
-    context = "\n\n---\n\n".join(context_parts)
+    context = "\n\n---\n\n".join(
+        f"Extract from {chunk.metadata.get('source', 'unknown')}:\n{chunk.page_content}"
+        for chunk in chunks
+    )
     system_prompt = SYSTEM_PROMPT.format(context=context)
-
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(history)
     messages.append({"role": "user", "content": question})
@@ -225,29 +223,30 @@ def make_rag_messages(
 
 
 def answer_question(
-    question: str, history: list[dict] = []
+    question: str, history: list[dict] | None = None
 ) -> tuple[str, list[Result]]:
+    history = history or []
     chunks = fetch_context(question)
     messages = make_rag_messages(question, history, chunks)
-
-    print(f"[Generating answer with {ANSWER_MODEL}...]")
     answer = call_llm(messages=messages, model=ANSWER_MODEL, temperature=0.7)
     return answer, chunks
 
 
+def answer_question_stream(question: str, history: list[dict] | None = None):
+    history = history or []
+    chunks = fetch_context(question)
+    messages = make_rag_messages(question, history, chunks)
+
+    partial_answer = ""
+    for token in call_llm_stream(
+        messages=messages, model=ANSWER_MODEL, temperature=0.7
+    ):
+        partial_answer += token
+        yield partial_answer, chunks
+
+
 if __name__ == "__main__":
-    print("=" * 60)
-    print("ADVANCED RAG ANSWER")
-    print("=" * 60)
-    print(f"Rewrite Model: {REWRITE_MODEL}")
-    print(f"Rerank Model: {RERANK_MODEL}")
-    print(f"Answer Model: {ANSWER_MODEL}")
-    print("=" * 60)
-
-    test_q = "What products does the company offer?"
-    print(f"\nTesting: {test_q}\n")
-
-    answer, chunks = answer_question(test_q)
-
-    print(f"\nANSWER:\n{answer}")
-    print(f"\n[Used {len(chunks)} context chunks]")
+    test_question = "What insurance products does Insurellm offer?"
+    answer, used_chunks = answer_question(test_question)
+    print(answer)
+    print(f"\nUsed {len(used_chunks)} chunks")

@@ -1,40 +1,28 @@
-"""
-AI Internal Knowledge Assistant
-================================
-Web interface for:
-- AI Chat with knowledge base
-- Document upload (incremental ingestion)
-- Document management with admin authentication
+"""Gradio app for the public Advanced RAG demo."""
 
-Run: python app.py
-URL: http://127.0.0.1:7860
-
-"""
+from __future__ import annotations
 
 import os
+
 import gradio as gr
-from src.answer import answer_question
+
+from src.answer import answer_question_stream
 from src.document_manager import (
-    upload_document,
-    list_documents,
     delete_document,
     get_stats,
+    list_documents,
+    upload_document,
 )
 
-# Admin password for document management (upload/delete)
-# Must be provided via environment variable before enabling admin actions.
+
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
-
-# ============ CUSTOM CSS ============
 CUSTOM_CSS = """
-/* Main container */
 .gradio-container {
     max-width: 1000px !important;
     margin: auto !important;
 }
 
-/* Header styling */
 .header-container {
     text-align: center;
     padding: 20px 0;
@@ -58,7 +46,6 @@ CUSTOM_CSS = """
     font-weight: 600;
 }
 
-/* Demo banner */
 .demo-banner {
     background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
     border: 1px solid #f59e0b;
@@ -73,62 +60,40 @@ CUSTOM_CSS = """
     font-size: 0.85rem;
     margin: 0;
 }
-
-/* Footer */
-.footer {
-    text-align: center;
-    padding: 15px;
-    color: #718096;
-    font-size: 0.85rem;
-    border-top: 1px solid #e2e8f0;
-    margin-top: 20px;
-}
-
-.footer-demo {
-    background: #f7fafc;
-    border-radius: 6px;
-    padding: 10px;
-    margin-top: 10px;
-}
 """
 
 
-# ============ CHAT FUNCTIONS ============
-def chat(message: str, history: list) -> str:
-    """Process user message and return AI response."""
+def chat_stream(message: str, history: list[tuple[str, str]]):
     if not message.strip():
-        return "Please enter a question."
+        yield "Please enter a question."
+        return
 
-    # Convert Gradio history format to OpenAI format
-    openai_history = []
+    openai_history: list[dict[str, str]] = []
     for user_msg, assistant_msg in history:
         openai_history.append({"role": "user", "content": user_msg})
         if assistant_msg:
             openai_history.append({"role": "assistant", "content": assistant_msg})
 
     try:
-        answer, chunks = answer_question(message, openai_history)
-        return answer
-    except Exception as e:
-        return "I apologize, but I'm having trouble processing your request right now. Please try again in a moment."
+        for partial_answer, _chunks in answer_question_stream(message, openai_history):
+            yield partial_answer
+    except Exception:
+        yield "I apologize, but I'm having trouble processing your request right now. Please try again in a moment."
 
 
-# ============ DOCUMENT MANAGEMENT FUNCTIONS ============
 def verify_password(password: str) -> bool:
-    """Verify admin password."""
     return bool(ADMIN_PASSWORD) and password == ADMIN_PASSWORD
 
 
 def handle_upload(file, doc_type):
-    """Handle document upload."""
     if file is None:
         return "Please select a file to upload.", refresh_doc_list(), refresh_stats()
 
     try:
         if hasattr(file, "name"):
             filename = file.name.split("/")[-1].split("\\")[-1]
-            with open(file.name, "r", encoding="utf-8") as f:
-                content = f.read()
+            with open(file.name, "r", encoding="utf-8") as handle:
+                content = handle.read()
         else:
             return "Invalid file.", refresh_doc_list(), refresh_stats()
 
@@ -136,29 +101,24 @@ def handle_upload(file, doc_type):
             return "File is empty.", refresh_doc_list(), refresh_stats()
 
         result = upload_document(
-            text=content,
-            filename=filename,
-            doc_type=doc_type or "uploaded",
+            text=content, filename=filename, doc_type=doc_type or "uploaded"
         )
-
         if result["status"] == "success":
             msg = f"Successfully uploaded '{filename}'\n"
             msg += f"Chunks created: {result['chunks_added']}\n"
-            msg += f"Total documents in KB: {result['total_documents']}"
+            msg += f"Total chunks in KB: {result['total_documents']}"
             return msg, refresh_doc_list(), refresh_stats()
-        else:
-            return (
-                f"Upload failed: {result['message']}",
-                refresh_doc_list(),
-                refresh_stats(),
-            )
 
-    except Exception as e:
-        return f"Error: {str(e)}", refresh_doc_list(), refresh_stats()
+        return (
+            f"Upload failed: {result['message']}",
+            refresh_doc_list(),
+            refresh_stats(),
+        )
+    except Exception as exc:
+        return f"Error: {exc}", refresh_doc_list(), refresh_stats()
 
 
 def handle_delete(source):
-    """Handle document deletion."""
     if not source:
         return (
             "Please select a document to delete.",
@@ -167,24 +127,17 @@ def handle_delete(source):
         )
 
     result = delete_document(source)
-
     if result["status"] == "success":
         msg = f"Deleted '{source}'\n"
         msg += f"Chunks removed: {result['chunks_deleted']}\n"
-        msg += f"Remaining documents: {result['total_documents']}"
+        msg += f"Remaining chunks: {result['total_documents']}"
         return msg, refresh_doc_list(), refresh_stats()
-    else:
-        return (
-            f"Delete failed: {result['message']}",
-            refresh_doc_list(),
-            refresh_stats(),
-        )
+
+    return f"Delete failed: {result['message']}", refresh_doc_list(), refresh_stats()
 
 
 def refresh_doc_list():
-    """Refresh the document list."""
     docs = list_documents()
-
     if not docs:
         return "No documents in knowledge base."
 
@@ -194,12 +147,10 @@ def refresh_doc_list():
         if len(source) > 50:
             source = "..." + source[-47:]
         lines.append(f"| {source} | {doc['type']} | {doc['chunk_count']} |")
-
     return "\n".join(lines)
 
 
 def refresh_stats():
-    """Refresh statistics display."""
     stats = get_stats()
     return (
         f"**{stats['total_chunks']}** chunks | **{stats['total_documents']}** documents"
@@ -207,292 +158,143 @@ def refresh_stats():
 
 
 def get_doc_choices():
-    """Get list of documents for dropdown."""
-    docs = list_documents()
-    return [doc["source"] for doc in docs]
+    return [doc["source"] for doc in list_documents()]
 
 
-# ============ CREATE INTERFACE ============
 def create_demo():
-    """Create the Gradio interface with tabs."""
-
-    with gr.Blocks(css=CUSTOM_CSS, title="AI Internal Knowledge Assistant") as demo:
-        # Header
-        gr.HTML("""
+    with gr.Blocks(css=CUSTOM_CSS, title="Advanced RAG Demo") as demo:
+        gr.HTML(
+            """
             <div class="header-container">
-                <div class="header-title">AI Internal Knowledge Assistant</div>
-                <span class="header-badge">INTERNAL USE ONLY</span>
+                <div class="header-title">Advanced RAG Demo</div>
+                <span class="header-badge">FICTIONAL COMPANY DATA</span>
             </div>
-        """)
+            """
+        )
 
-        # Demo disclaimer
-        gr.HTML("""
+        gr.HTML(
+            """
             <div class="demo-banner">
                 <p class="demo-banner-text">
-                    <strong>Demo with Fictional Data</strong> - 
-                    Portfolio project showcasing RAG technology. All data is fictional.
+                    <strong>Portfolio Project</strong> - Semantic chunking, query rewriting,
+                    multi-query retrieval, re-ranking, and document management.
                 </p>
             </div>
-        """)
+            """
+        )
 
-        # Tabs
         with gr.Tabs():
-            # ============ TAB 1: CHAT ============
             with gr.TabItem("Chat"):
                 chatbot = gr.Chatbot(
-                    height=400,
-                    show_label=False,
-                    bubble_full_width=False,
+                    height=420, show_label=False, bubble_full_width=False
                 )
+                msg = gr.Textbox(
+                    label="Ask a question",
+                    placeholder="What products does Insurellm offer?",
+                )
+                send = gr.Button("Send", variant="primary")
+                clear = gr.Button("Clear")
 
-                with gr.Row():
-                    msg = gr.Textbox(
-                        placeholder="Ask about products, employees, contracts, policies...",
-                        show_label=False,
-                        container=False,
-                        scale=9,
-                    )
-                    submit_btn = gr.Button("Send", variant="primary", scale=1)
-
-                with gr.Row():
-                    clear_btn = gr.Button("Clear Chat", size="sm")
-
-                gr.Markdown("### Quick Questions")
-                gr.Examples(
+                examples = gr.Examples(
                     examples=[
-                        ["What products does the company offer?"],
-                        ["Tell me about employee benefits"],
-                        ["What is the company culture?"],
+                        "What insurance products does Insurellm offer?",
+                        "Tell me about employee Alex Chen.",
+                        "What is the company culture like?",
                     ],
                     inputs=msg,
-                    label="",
                 )
 
-                # Chat event handlers
-                def respond(message, chat_history):
-                    if not message.strip():
-                        return "", chat_history
-                    bot_message = chat(message, chat_history)
-                    chat_history.append((message, bot_message))
-                    return "", chat_history
+                def respond(message, history):
+                    history = history or []
+                    history.append((message, ""))
+                    for partial in chat_stream(message, history[:-1]):
+                        history[-1] = (message, partial)
+                        yield "", history
 
-                def clear_chat_fn():
-                    return [], ""
+                send.click(fn=respond, inputs=[msg, chatbot], outputs=[msg, chatbot])
+                msg.submit(fn=respond, inputs=[msg, chatbot], outputs=[msg, chatbot])
+                clear.click(lambda: [], None, chatbot, queue=False)
 
-                msg.submit(respond, [msg, chatbot], [msg, chatbot])
-                submit_btn.click(respond, [msg, chatbot], [msg, chatbot])
-                clear_btn.click(clear_chat_fn, outputs=[chatbot, msg])
-
-            # ============ TAB 2: DOCUMENT MANAGEMENT ============
             with gr.TabItem("Documents"):
-                # ===== LOGIN SECTION =====
-                with gr.Column(visible=True) as login_section:
-                    gr.Markdown("### Admin Authentication Required")
-                    gr.Markdown(
-                        "This section contains sensitive document management functions. "
-                        "Set the `ADMIN_PASSWORD` environment variable, then enter it here to continue."
+                gr.Markdown("### Document Management")
+
+                if ADMIN_PASSWORD:
+                    password = gr.Textbox(label="Admin password", type="password")
+                    unlock = gr.Button("Unlock")
+                    access = gr.Markdown(
+                        "Enter the admin password to manage documents."
                     )
+                    admin_panel = gr.Column(visible=False)
 
-                    with gr.Row():
-                        admin_password = gr.Textbox(
-                            label="Admin Password",
-                            type="password",
-                            placeholder="Enter password...",
-                            scale=3,
-                        )
-                        unlock_btn = gr.Button("Unlock", variant="primary", scale=1)
-
-                    login_status = gr.Markdown("")
-
-                # ===== ADMIN PANEL =====
-                with gr.Column(visible=False) as admin_panel:
-                    gr.Markdown("### Knowledge Base Statistics")
-                    stats_display = gr.Markdown(value=refresh_stats())
-
-                    gr.Markdown("---")
-
-                    gr.Markdown("### Upload New Document")
-                    gr.Markdown(
-                        "*Upload `.md` or `.txt` files. Documents are automatically chunked and indexed.*"
-                    )
-
-                    with gr.Row():
+                    with admin_panel:
                         file_input = gr.File(
-                            label="Select File",
-                            file_types=[".md", ".txt"],
-                            file_count="single",
+                            label="Upload file", file_types=[".md", ".txt"]
                         )
-                        doc_type_input = gr.Dropdown(
+                        doc_type = gr.Dropdown(
                             choices=[
                                 "company",
                                 "products",
                                 "employees",
                                 "contracts",
-                                "policies",
-                                "other",
+                                "uploaded",
                             ],
-                            value="other",
-                            label="Document Type",
+                            value="uploaded",
+                            label="Document type",
                         )
+                        upload_btn = gr.Button("Upload document", variant="primary")
+                        upload_output = gr.Textbox(label="Upload result")
 
-                    upload_btn = gr.Button("Upload Document", variant="primary")
-                    upload_status = gr.Textbox(
-                        label="Status", interactive=False, lines=3
-                    )
+                        doc_list = gr.Markdown(refresh_doc_list())
+                        stats = gr.Markdown(refresh_stats())
 
-                    gr.Markdown("---")
-
-                    gr.Markdown("### Documents in Knowledge Base")
-                    doc_list_display = gr.Markdown(value=refresh_doc_list())
-
-                    refresh_btn = gr.Button("Refresh List", size="sm")
-
-                    gr.Markdown("---")
-
-                    gr.Markdown("### Delete Document")
-                    gr.Markdown(
-                        "*Select a document to remove from the knowledge base.*"
-                    )
-
-                    with gr.Row():
-                        delete_dropdown = gr.Dropdown(
+                        delete_choice = gr.Dropdown(
                             choices=get_doc_choices(),
-                            label="Select Document",
-                            interactive=True,
+                            label="Select a document to delete",
                         )
-                        delete_btn = gr.Button("Delete", variant="stop")
+                        delete_btn = gr.Button("Delete document")
+                        delete_output = gr.Textbox(label="Delete result")
 
-                    delete_status = gr.Textbox(
-                        label="Status", interactive=False, lines=2
+                        upload_btn.click(
+                            fn=handle_upload,
+                            inputs=[file_input, doc_type],
+                            outputs=[upload_output, doc_list, stats],
+                        ).then(
+                            fn=lambda: gr.update(choices=get_doc_choices()),
+                            outputs=delete_choice,
+                        )
+
+                        delete_btn.click(
+                            fn=handle_delete,
+                            inputs=delete_choice,
+                            outputs=[delete_output, doc_list, stats],
+                        ).then(
+                            fn=lambda: gr.update(choices=get_doc_choices(), value=None),
+                            outputs=delete_choice,
+                        )
+
+                    def handle_unlock(input_password: str):
+                        if verify_password(input_password):
+                            return (
+                                gr.update(value="Admin access unlocked."),
+                                gr.update(visible=True),
+                            )
+                        return gr.update(value="Access denied."), gr.update(
+                            visible=False
+                        )
+
+                    unlock.click(
+                        handle_unlock, inputs=password, outputs=[access, admin_panel]
                     )
-
-                # ===== EVENT HANDLERS =====
-                def handle_unlock(password):
-                    if not ADMIN_PASSWORD:
-                        return (
-                            gr.Column(visible=True),
-                            gr.Column(visible=False),
-                            "**Admin access is disabled.** Set `ADMIN_PASSWORD` in your environment to enable document management.",
-                            gr.update(),
-                            gr.update(),
-                            gr.update(),
-                        )
-                    if verify_password(password):
-                        return (
-                            gr.Column(visible=False),
-                            gr.Column(visible=True),
-                            "",
-                            refresh_stats(),
-                            refresh_doc_list(),
-                            gr.Dropdown(choices=get_doc_choices()),
-                        )
-                    else:
-                        return (
-                            gr.Column(visible=True),
-                            gr.Column(visible=False),
-                            "**Access denied.** Incorrect password.",
-                            gr.update(),
-                            gr.update(),
-                            gr.update(),
-                        )
-
-                unlock_btn.click(
-                    handle_unlock,
-                    inputs=[admin_password],
-                    outputs=[
-                        login_section,
-                        admin_panel,
-                        login_status,
-                        stats_display,
-                        doc_list_display,
-                        delete_dropdown,
-                    ],
-                )
-
-                admin_password.submit(
-                    handle_unlock,
-                    inputs=[admin_password],
-                    outputs=[
-                        login_section,
-                        admin_panel,
-                        login_status,
-                        stats_display,
-                        doc_list_display,
-                        delete_dropdown,
-                    ],
-                )
-
-                upload_btn.click(
-                    handle_upload,
-                    inputs=[file_input, doc_type_input],
-                    outputs=[upload_status, doc_list_display, stats_display],
-                )
-
-                def refresh_all():
-                    return (
-                        refresh_doc_list(),
-                        refresh_stats(),
-                        gr.Dropdown(choices=get_doc_choices()),
+                    password.submit(
+                        handle_unlock, inputs=password, outputs=[access, admin_panel]
                     )
-
-                refresh_btn.click(
-                    refresh_all,
-                    outputs=[doc_list_display, stats_display, delete_dropdown],
-                )
-
-                def delete_and_refresh(source):
-                    status, doc_list, stats = handle_delete(source)
-                    return (
-                        status,
-                        doc_list,
-                        stats,
-                        gr.Dropdown(choices=get_doc_choices()),
+                else:
+                    gr.Markdown(
+                        "Document management is disabled. Set `ADMIN_PASSWORD` in your environment to enable it."
                     )
-
-                delete_btn.click(
-                    delete_and_refresh,
-                    inputs=[delete_dropdown],
-                    outputs=[
-                        delete_status,
-                        doc_list_display,
-                        stats_display,
-                        delete_dropdown,
-                    ],
-                )
-
-        # Footer
-        gr.HTML("""
-            <div class="footer">
-                <p><strong>AI Internal Knowledge Assistant</strong></p>
-                <div class="footer-demo">
-                    <p style="font-size: 0.75rem; color: #718096; margin: 0;">
-                        <strong>Portfolio Project</strong> |
-                        Built with RAG, ChromaDB & Gradio
-                    </p>
-                </div>
-            </div>
-        """)
 
     return demo
 
 
-# Create and launch
-demo = create_demo()
-
-
 if __name__ == "__main__":
-    print("\n" + "=" * 50)
-    print("  AI INTERNAL KNOWLEDGE ASSISTANT")
-    print("  Portfolio Project - RAG Demo")
-    print("=" * 50)
-    print("\n  Features:")
-    print("  - Chat: Ask questions about knowledge base")
-    print("  - Documents: Upload/manage documents (requires admin password)")
-    print(f"\n  URL: http://127.0.0.1:7860\n")
-    print("=" * 50 + "\n")
-
-    demo.launch(
-        server_port=7860,
-        share=False,
-        show_error=False,
-    )
+    create_demo().launch()

@@ -1,7 +1,7 @@
-# AI Internal Knowledge Assistant
+# Advanced RAG Demo - Internal Knowledge Assistant
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=Sxkf9a6Gkrs">
+  <a href="https://www.youtube.com/watch?v=o2GRJSOT7Yo">
     <img src="https://img.shields.io/badge/Demo%20Video-Watch%20on%20YouTube-red?style=for-the-badge&logo=youtube" alt="Demo Video" />
   </a>
 </p>
@@ -11,292 +11,277 @@
   <img src="https://img.shields.io/badge/Gradio-UI-orange?style=for-the-badge" alt="Gradio" />
   <img src="https://img.shields.io/badge/ChromaDB-Vector%20DB-brightgreen?style=for-the-badge" alt="ChromaDB" />
   <img src="https://img.shields.io/badge/RAG-Advanced-purple?style=for-the-badge" alt="Advanced RAG" />
-  <img src="https://img.shields.io/badge/Embeddings-HuggingFace-yellow?style=for-the-badge" alt="Embeddings" />
-  <img src="https://img.shields.io/badge/API-OpenAI%20Compatible-black?style=for-the-badge" alt="OpenAI Compatible API" />
+  <img src="https://img.shields.io/badge/OpenRouter-LLM%20Provider-black?style=for-the-badge" alt="OpenRouter" />
+  <img src="https://img.shields.io/badge/Evaluation-Benchmark%20Driven-success?style=for-the-badge" alt="Evaluation Driven" />
 </p>
 
-A portfolio project that turns a fictional company's internal documents into an AI assistant using an advanced RAG pipeline.
+An evaluation-tuned RAG portfolio project built for recruiter-facing demonstration.
 
-This project goes beyond a basic chatbot by combining semantic chunking, vector retrieval, query rewriting, multi-query retrieval, LLM re-ranking, and incremental document management in a single end-to-end application.
+This repository contains the `Advanced RAG` version of the project: a production-style internal knowledge assistant with semantic chunking, OpenAI embeddings via OpenRouter, query rewriting, multi-query retrieval, LLM re-ranking, streaming answers, and incremental document management.
 
-## Project Highlights
+In this project, `Advanced RAG` refers to the custom retrieval pipeline implementation, while `LangChain` is kept as the framework baseline.
 
-- Built an end-to-end advanced RAG application with ingestion, retrieval, re-ranking, and UI
-- Implemented query rewriting and multi-query retrieval to improve answer quality
-- Added admin-style document upload and deletion for a more realistic internal AI workflow
-- Used local embeddings with an OpenAI-compatible API to balance cost and performance
+It was also benchmarked against a separate `LangChain` baseline implementation to show not only that the system works, but that the more advanced retrieval design measurably improves quality.
 
-## Demo
+## Why This Stands Out
 
-- Video demo: `https://www.youtube.com/watch?v=Sxkf9a6Gkrs`
-- The app supports both question answering and admin-style document management
+- Built a full Advanced RAG system, not just embed -> retrieve -> answer
+- Added semantic chunking, query rewriting, multi-query retrieval, and LLM re-ranking
+- Included a Gradio app with streaming chat, document upload, delete, and admin-style workflow
+- Benchmarked the system against a LangChain baseline and improved it iteratively
+- Used evaluation results to tune retrieval strategy instead of relying on intuition alone
 
-## Table of Contents
+## Demo Video
 
-- [Why This Project Matters](#why-this-project-matters)
-- [What The App Does](#what-the-app-does)
-- [Core Techniques Used](#core-techniques-used)
-- [Architecture](#architecture)
-- [Project Structure](#project-structure)
-- [Tech Stack](#tech-stack)
-- [Skills Demonstrated](#skills-demonstrated)
-- [Quick Start](#quick-start)
-- [Environment Variables](#environment-variables)
-- [Engineering Decisions](#engineering-decisions)
-- [Example Questions](#example-questions)
-- [Future Improvements](#future-improvements)
-- [License](#license)
+- YouTube demo: `https://www.youtube.com/watch?v=o2GRJSOT7Yo`
+- The video showcases the chat workflow, document management flow, and the overall Advanced RAG product experience.
+- The benchmark screenshots later in this README show how the system compares against the LangChain baseline.
 
-## Why This Project Matters
+## Key Features
 
-Many RAG demos stop at: embed documents -> retrieve top chunks -> answer.
+### Advanced RAG
 
-This project is designed to be closer to a real internal AI tool:
+- LLM-based semantic chunking with `headline + summary + original_text`
+- OpenAI `text-embedding-3-large` embeddings via OpenRouter
+- Query rewriting before retrieval
+- Multi-query retrieval using both original and rewritten questions
+- LLM re-ranking before answer generation
+- Top-K tuning for stronger retrieval coverage and answer completeness
 
-- document ingestion with LLM-based semantic chunking
-- advanced retrieval with query rewriting and re-ranking
-- local embeddings for lower cost
-- admin-style document upload and deletion
-- modular code structure for ingestion, retrieval, and UI
+### Product-Like Workflow
 
-It demonstrates the kind of thinking needed for AI product development: balancing quality, cost, maintainability, and user workflow.
+- Gradio chat interface
+- Incremental document upload without rebuilding the full database
+- Document listing and deletion
+- Password-protected admin actions
 
-## What The App Does
+### Engineering Focus
 
-- answers questions over a fictional internal knowledge base
-- uses conversation history during Q&A
-- lets an admin upload new `.md` and `.txt` files
-- supports incremental ingestion without rebuilding the full vector database
-- allows listing and deleting indexed documents
-
-## Core Techniques Used
-
-### 1. Semantic Chunking
-
-Instead of splitting documents only by character count, the ingestion pipeline uses an LLM to create chunks with:
-
-- a short headline
-- a compact summary
-- the original text
-
-This gives each chunk stronger semantic structure for retrieval.
-
-### 2. Query Rewriting
-
-User questions are often vague or conversational. Before retrieval, the system rewrites the question into a more search-friendly form.
-
-Example:
-
-- user question: `What do you offer?`
-- rewritten query: `List company products and services`
-
-This improves recall.
-
-### 3. Multi-Query Retrieval
-
-The system retrieves with both:
-
-- the original user question
-- the rewritten query
-
-Then it merges and deduplicates the results.
-
-This reduces the chance of missing useful chunks.
-
-### 4. LLM Re-Ranking
-
-Vector similarity is useful, but it does not always produce the best final ranking.
-
-After retrieval, the system asks an LLM to re-rank the candidate chunks based on actual relevance to the question.
-
-This improves precision before answer generation.
-
-### 5. Incremental Document Management
-
-New files can be uploaded and indexed without reprocessing the full knowledge base.
-
-This is handled through a document manager module and exposed through the Gradio UI.
+- Modular separation between ingestion, answering, and document management
+- Configurable model/provider setup via environment variables
+- Evaluation-driven iteration using retrieval and answer quality metrics
 
 ## Architecture
 
 ```text
-knowledge-base/ documents
-        |
-        v
-src/ingest.py
-  - load files
-  - semantic chunking
-  - local embeddings
-  - store in ChromaDB
-        |
-        v
-preprocessed_db/
-        |
-        v
-src/answer.py
-  - rewrite query
-  - retrieve original query
-  - retrieve rewritten query
-  - merge results
-  - rerank chunks
-  - generate final answer
-        |
-        v
-app.py
-  - chat UI
-  - admin upload/delete UI
+knowledge-base/
+    -> src/ingest.py
+       - load markdown files
+       - semantic chunking with an LLM
+       - OpenAI embeddings via OpenRouter
+       - persist to ChromaDB
+    -> preprocessed_db/
+    -> src/answer.py
+       - rewrite query
+       - retrieve original + rewritten query
+       - merge and deduplicate chunks
+       - rerank chunks with an LLM
+       - generate final answer
+    -> app.py
+       - chat UI
+       - document upload/delete UI
 ```
+
+## Advanced RAG vs LangChain
+
+This repository contains the `Advanced RAG` code and also includes a separate `LangChain` baseline in `langchain_baseline/` for direct comparison.
+
+Here, `Advanced RAG` means the custom pipeline implementation rather than the LangChain version.
+
+The LangChain version is intentionally a baseline. LangChain can support many of these advanced techniques too, but I kept that version simpler on purpose. I used it to demonstrate framework familiarity and fast prototyping, while the custom Advanced RAG version was where I implemented and tuned the retrieval logic more explicitly. This gave me clearer control over each step, made benchmarking easier, and helped me measure which retrieval decisions actually improved quality instead of hiding them behind higher-level abstractions.
+
+### Feature Comparison
+
+| Capability | LangChain | Advanced RAG |
+|---|---|---|
+| Chunking | `RecursiveCharacterTextSplitter` | LLM semantic chunking |
+| Embeddings | HuggingFace `all-MiniLM-L6-v2` (384d) | OpenAI `text-embedding-3-large` via OpenRouter (3072d) |
+| Query rewriting | No | Yes |
+| Multi-query retrieval | No | Yes |
+| LLM re-ranking | No | Yes |
+| Streaming UI | No | Yes |
+| Document management | No | Upload / delete / stats |
+| Evaluation usage | Baseline | Tuned using benchmark results |
+
+### Evaluation Results
+
+The latest `Advanced RAG` run in this project achieved:
+
+| Metric | LangChain | Advanced RAG |
+|---|---:|---:|
+| MRR | 0.7442 | 0.9290 |
+| nDCG | 0.7602 | 0.9247 |
+| Keyword Coverage | 86.4% | 96.6% |
+| Accuracy | 4.05/5 | 4.79/5 |
+| Completeness | 3.99/5 | 4.35/5 |
+| Relevance | 4.68/5 | 4.77/5 |
+
+### Evaluation Screenshots
+
+#### Retrieval Evaluation
+
+<table>
+  <tr>
+    <td align="center"><strong>LangChain</strong></td>
+    <td align="center"><strong>Advanced RAG</strong></td>
+  </tr>
+  <tr>
+    <td><img src="assets/evaluation/langchain-retrieval.jpg" alt="LangChain Retrieval Evaluation" width="100%" /></td>
+    <td><img src="assets/evaluation/advanced-rag-retrieval.jpg" alt="Advanced RAG Retrieval Evaluation" width="100%" /></td>
+  </tr>
+</table>
+
+#### Answer Evaluation
+
+<table>
+  <tr>
+    <td align="center"><strong>LangChain</strong></td>
+    <td align="center"><strong>Advanced RAG</strong></td>
+  </tr>
+  <tr>
+    <td><img src="assets/evaluation/langchain-answer.jpg" alt="LangChain Answer Evaluation" width="100%" /></td>
+    <td><img src="assets/evaluation/advanced-rag-answer.jpg" alt="Advanced RAG Answer Evaluation" width="100%" /></td>
+  </tr>
+</table>
+
+### What Improved the Most
+
+- Always rewriting the query instead of using a conditional heuristic
+- Retrieving with both the original and rewritten question
+- Re-ranking with richer chunk context before answer generation
+- Tuning `RETRIEVAL_K` and `FINAL_K` based on evaluation results
+
+This was the key lesson from the project: retrieval quality improved most when I tuned the retrieval policy itself, not just the answer model.
+
+## Recruiter-Relevant Skills Demonstrated
+
+- Python LLM application development
+- Retrieval-Augmented Generation (RAG)
+- Prompt design for chunking, rewriting, and reranking
+- ChromaDB vector search
+- Gradio UI development
+- Document ingestion workflows
+- Evaluation-driven iteration
+- Comparative benchmarking against a baseline implementation
 
 ## Project Structure
 
 ```text
+github-repo/
 ├── app.py
 ├── src/
 │   ├── answer.py
 │   ├── ingest.py
-│   └── document_manager.py
+│   ├── document_manager.py
+│   └── __init__.py
+├── langchain_baseline/
+│   ├── answer.py
+│   ├── ingest.py
+│   ├── README.md
+│   └── __init__.py
 ├── knowledge-base/
-├── preprocessed_db/          # auto-generated
+├── assets/
+│   └── evaluation/
+│       ├── advanced-rag-answer.jpg
+│       ├── advanced-rag-retrieval.jpg
+│       ├── langchain-answer.jpg
+│       └── langchain-retrieval.jpg
+├── docs/
+│   └── langchain-vs-advanced-rag.md
 ├── .env.example
 ├── .gitignore
 ├── requirements.txt
 └── README.md
 ```
 
-## Tech Stack
-
-| Component | Technology |
-|-----------|------------|
-| Application UI | Gradio |
-| LLM API | OpenAI-compatible API |
-| Embeddings | HuggingFace `sentence-transformers/all-MiniLM-L6-v2` |
-| Vector Database | ChromaDB |
-| Validation | Pydantic |
-| Language | Python |
-
-## Skills Demonstrated
-
-This project demonstrates hands-on ability in:
-
-- LLM application development
-- retrieval-augmented generation
-- prompt design for chunking and rewriting
-- vector search and semantic retrieval
-- ranking and answer quality improvement
-- Python backend organization
-- lightweight AI product UI design
-- document ingestion workflows
-
 ## Quick Start
 
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/YOUR_USERNAME/ai-knowledge-assistant.git
-cd ai-knowledge-assistant
-```
-
-### 2. Create a virtual environment
+### 1. Create a virtual environment
 
 ```bash
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or
-.\venv\Scripts\activate   # Windows
+source venv/bin/activate
 ```
 
-### 3. Install dependencies
+Windows:
+
+```bash
+.\venv\Scripts\activate
+```
+
+### 2. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configure environment variables
+### 3. Configure environment variables
+
+Create a `.env` file from `.env.example`, then update it with your provider key and model choices.
+
+Linux/Mac:
 
 ```bash
 cp .env.example .env
 ```
 
-Then edit `.env` with your provider settings.
+Windows:
 
-### 5. Add or review knowledge base documents
-
-Put your markdown files under `knowledge-base/`, for example:
-
-```text
-knowledge-base/
-├── company/
-├── products/
-├── policies/
-└── contracts/
+```bash
+copy .env.example .env
 ```
 
-### 6. Build the vector database
+### 4. Build the Advanced RAG vector database
 
 ```bash
 python -m src.ingest
 ```
 
-### 7. Run the app
+### 5. Run the Advanced RAG app
 
 ```bash
 python app.py
 ```
 
-Open `http://127.0.0.1:7860` in your browser.
+Then open `http://127.0.0.1:7860`.
+
+### 6. Optional: build and test the LangChain baseline
+
+```bash
+python -m langchain_baseline.ingest
+python -m langchain_baseline.answer
+```
 
 ## Environment Variables
 
-| Variable | Purpose | Required |
-|----------|---------|----------|
-| `OPENAI_API_KEY` | API key for your OpenAI-compatible provider | Yes |
-| `OPENAI_BASE_URL` | Provider endpoint URL | No |
-| `ANSWER_MODEL` | Model used for final answer generation | No |
-| `REWRITE_MODEL` | Model used for query rewriting | No |
-| `RERANK_MODEL` | Model used for re-ranking chunks | No |
-| `CHUNKING_MODEL` | Model used during ingestion chunking | No |
-| `ADMIN_PASSWORD` | Password for document management UI | Yes |
-
-## Engineering Decisions
-
-### Why local embeddings?
-
-I use local HuggingFace embeddings to reduce recurring API cost while still getting solid retrieval quality for a portfolio-scale knowledge base.
-
-### Why separate ingestion from answering?
-
-Because they solve different problems:
-
-- ingestion prepares and structures knowledge
-- answering focuses on retrieval quality and response generation
-
-This separation also makes the codebase easier to maintain and extend.
-
-### Why include document management?
-
-Because real AI tools are rarely static. Internal knowledge changes over time, so upload/delete flows are important for making the app feel closer to a practical internal product.
+| Variable | Purpose |
+|---|---|
+| `OPENROUTER_API_KEY` | Main API key used by the Advanced RAG pipeline |
+| `OPENAI_API_KEY` | Optional direct OpenAI key for alternative setups |
+| `OPENAI_BASE_URL` | Base URL for OpenAI-compatible APIs |
+| `ANSWER_MODEL` | Final answer model |
+| `REWRITE_MODEL` | Query rewriting model |
+| `RERANK_MODEL` | Re-ranking model |
+| `CHUNKING_MODEL` | Semantic chunking model |
+| `LANGCHAIN_LLM_MODEL` | Optional answer model for the LangChain baseline |
+| `ADMIN_PASSWORD` | Password for document management actions |
 
 ## Example Questions
 
 - `What products does the company offer?`
-- `What is the company culture?`
-- `What are the employee benefits?`
-- `What information is available in the contracts folder?`
-
-## Future Improvements
-
-- source citations in the chat response
-- RAG evaluation dashboard
-- role-based access control
-- async/background ingestion jobs
-- hybrid search and metadata filtering
-- better observability for latency and retrieval quality
+- `What is the company culture like?`
+- `Summarize the contracts-related information in the knowledge base.`
+- `What benefits are available to employees?`
 
 ## Notes
 
-- all data in this project is fictional
-- this repo is intended for learning, portfolio, and experimentation
-- the vector database is generated locally and should not be committed
+- The knowledge base content is fictional and created for portfolio use.
+- The LangChain implementation is included as a comparison baseline in `langchain_baseline/`.
+- The vector database should be generated locally and not committed.
+
+## Additional Comparison Notes
+
+See `docs/langchain-vs-advanced-rag.md` for a more explicit breakdown of the design trade-offs and evaluation story.
 
 ## License
 

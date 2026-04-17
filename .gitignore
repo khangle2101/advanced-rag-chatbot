@@ -35,6 +35,7 @@ env/
 vector_db/
 chroma_db/
 preprocessed_db/
+langchain_vectordb/
 *.db
 
 # IDE
