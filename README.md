@@ -155,6 +155,26 @@ The latest `Advanced RAG` run in this project achieved:
 
 This was the key lesson from the project: retrieval quality improved most when I tuned the retrieval policy itself, not just the answer model.
 
+## Technical Decisions
+
+### Why semantic chunking instead of character-based chunking?
+
+- Character splitting is fast and simple, but it can cut across ideas in awkward places.
+- Semantic chunking creates chunks that are more self-contained and more likely to answer a real user question directly.
+- Adding `headline + summary + original_text` also improves retrieval quality because the embedding captures both the raw content and a compact semantic description.
+
+### Why OpenAI embeddings via OpenRouter?
+
+- The Advanced RAG pipeline uses `text-embedding-3-large` for stronger retrieval quality.
+- This gives a much richer vector representation than the smaller HuggingFace baseline used in the LangChain version.
+- OpenRouter keeps the provider setup simple while letting the project use OpenAI-compatible APIs consistently.
+
+### What did evaluation change in the final system?
+
+- It showed that retrieval policy mattered more than I first expected.
+- The strongest improvements came from always rewriting the query, retrieving from both query versions, and reranking with richer chunk context.
+- In other words, the final system was not just built - it was tuned based on measurable benchmark feedback.
+
 ## Recruiter-Relevant Skills Demonstrated
 
 - Python LLM application development
