@@ -13,6 +13,15 @@
   <img src="https://img.shields.io/badge/RAG-Advanced-purple?style=for-the-badge" alt="Advanced RAG" />
   <img src="https://img.shields.io/badge/OpenRouter-LLM%20Provider-black?style=for-the-badge" alt="OpenRouter" />
   <img src="https://img.shields.io/badge/Evaluation-Benchmark%20Driven-success?style=for-the-badge" alt="Evaluation Driven" />
+  <img src="https://img.shields.io/badge/OpenAI-Embeddings-10a37f?style=for-the-badge&logo=openai" alt="OpenAI Embeddings" />
+  <img src="https://img.shields.io/badge/LangChain-Baseline-1c3c3c?style=for-the-badge" alt="LangChain Baseline" />
+  <img src="https://img.shields.io/badge/Semantic%20Chunking-LLM%20Powered-8b5cf6?style=for-the-badge" alt="Semantic Chunking" />
+  <img src="https://img.shields.io/badge/Query%20Rewriting-Enabled-2563eb?style=for-the-badge" alt="Query Rewriting" />
+  <img src="https://img.shields.io/badge/Multi--Query%20Retrieval-Enabled-0f766e?style=for-the-badge" alt="Multi Query Retrieval" />
+  <img src="https://img.shields.io/badge/LLM%20Re--Ranking-Enabled-c2410c?style=for-the-badge" alt="LLM Reranking" />
+  <img src="https://img.shields.io/badge/Streaming-Answers-e11d48?style=for-the-badge" alt="Streaming Answers" />
+  <img src="https://img.shields.io/badge/Document%20Management-Incremental-7c3aed?style=for-the-badge" alt="Document Management" />
+  <img src="https://img.shields.io/badge/Prompt%20Engineering-Applied-f59e0b?style=for-the-badge" alt="Prompt Engineering" />
 </p>
 
 An evaluation-tuned RAG portfolio project built for recruiter-facing demonstration.
@@ -30,6 +39,19 @@ It was also benchmarked against a separate `LangChain` baseline implementation t
 - Included a Gradio app with streaming chat, document upload, delete, and admin-style workflow
 - Benchmarked the system against a LangChain baseline and improved it iteratively
 - Used evaluation results to tune retrieval strategy instead of relying on intuition alone
+
+## Key Results at a Glance
+
+| Highlight | Result |
+|---|---:|
+| Retrieval quality (MRR) | `0.9290` |
+| Retrieval quality (nDCG) | `0.9247` |
+| Keyword coverage | `96.6%` |
+| Answer accuracy | `4.79 / 5` |
+| Answer completeness | `4.35 / 5` |
+| Answer relevance | `4.77 / 5` |
+| Improvement over LangChain baseline (MRR) | `+24.8%` |
+| Improvement over LangChain baseline (keyword coverage) | `+10.2 points` |
 
 ## Demo Video
 
@@ -66,20 +88,37 @@ It was also benchmarked against a separate `LangChain` baseline implementation t
 ```text
 knowledge-base/
     -> src/ingest.py
-       - load markdown files
-       - semantic chunking with an LLM
-       - OpenAI embeddings via OpenRouter
-       - persist to ChromaDB
-    -> preprocessed_db/
+       -> semantic chunking with OpenRouter
+       -> OpenAI embeddings via OpenRouter
+       -> ChromaDB vector store
+
+User Question
     -> src/answer.py
-       - rewrite query
-       - retrieve original + rewritten query
-       - merge and deduplicate chunks
-       - rerank chunks with an LLM
-       - generate final answer
+       -> query rewriting
+       -> original retrieval + rewritten retrieval
+       -> merge and deduplicate chunks
+       -> LLM re-ranking
+       -> final answer generation
+
+Gradio App
     -> app.py
-       - chat UI
-       - document upload/delete UI
+       -> streaming chat experience
+       -> document upload/delete workflow
+       -> admin-protected document management
+```
+
+### Request Flow
+
+```text
+User question
+    -> rewrite query
+    -> retrieve with original question
+    -> retrieve with rewritten question
+    -> merge results
+    -> rerank chunks with an LLM
+    -> build final context
+    -> generate answer
+    -> stream response in the UI
 ```
 
 ## Advanced RAG vs LangChain
