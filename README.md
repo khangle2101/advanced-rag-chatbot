@@ -8,20 +8,12 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python" alt="Python" />
-  <img src="https://img.shields.io/badge/Gradio-UI-orange?style=for-the-badge" alt="Gradio" />
-  <img src="https://img.shields.io/badge/ChromaDB-Vector%20DB-brightgreen?style=for-the-badge" alt="ChromaDB" />
-  <img src="https://img.shields.io/badge/RAG-Advanced-purple?style=for-the-badge" alt="Advanced RAG" />
-  <img src="https://img.shields.io/badge/OpenRouter-LLM%20Provider-black?style=for-the-badge" alt="OpenRouter" />
-  <img src="https://img.shields.io/badge/Evaluation-Benchmark%20Driven-success?style=for-the-badge" alt="Evaluation Driven" />
-  <img src="https://img.shields.io/badge/OpenAI-Embeddings-10a37f?style=for-the-badge&logo=openai" alt="OpenAI Embeddings" />
+  <img src="https://img.shields.io/badge/Prompt%20Engineering-4%20Custom%20Prompts-f59e0b?style=for-the-badge" alt="Prompt Engineering" />
+  <img src="https://img.shields.io/badge/RAG-Advanced%20Pipeline-purple?style=for-the-badge" alt="Advanced RAG" />
   <img src="https://img.shields.io/badge/LangChain-Baseline-1c3c3c?style=for-the-badge" alt="LangChain Baseline" />
-  <img src="https://img.shields.io/badge/Semantic%20Chunking-LLM%20Powered-8b5cf6?style=for-the-badge" alt="Semantic Chunking" />
-  <img src="https://img.shields.io/badge/Query%20Rewriting-Enabled-2563eb?style=for-the-badge" alt="Query Rewriting" />
-  <img src="https://img.shields.io/badge/Multi--Query%20Retrieval-Enabled-0f766e?style=for-the-badge" alt="Multi Query Retrieval" />
-  <img src="https://img.shields.io/badge/LLM%20Re--Ranking-Enabled-c2410c?style=for-the-badge" alt="LLM Reranking" />
-  <img src="https://img.shields.io/badge/Streaming-Answers-e11d48?style=for-the-badge" alt="Streaming Answers" />
-  <img src="https://img.shields.io/badge/Document%20Management-Incremental-7c3aed?style=for-the-badge" alt="Document Management" />
-  <img src="https://img.shields.io/badge/Prompt%20Engineering-Applied-f59e0b?style=for-the-badge" alt="Prompt Engineering" />
+  <img src="https://img.shields.io/badge/OpenAI-Embeddings%20%26%20LLMs-10a37f?style=for-the-badge&logo=openai" alt="OpenAI" />
+  <img src="https://img.shields.io/badge/ChromaDB-Vector%20DB-brightgreen?style=for-the-badge" alt="ChromaDB" />
+  <img src="https://img.shields.io/badge/Evaluation-Benchmark%20Driven-success?style=for-the-badge" alt="Evaluation Driven" />
 </p>
 
 An evaluation-tuned RAG portfolio project built for recruiter-facing demonstration.
@@ -85,40 +77,39 @@ It was also benchmarked against a separate `LangChain` baseline implementation t
 
 ## Architecture
 
-```text
-knowledge-base/
-    -> src/ingest.py
-       -> semantic chunking with OpenRouter
-       -> OpenAI embeddings via OpenRouter
-       -> ChromaDB vector store
+### Ingestion Pipeline
 
-User Question
-    -> src/answer.py
-       -> query rewriting
-       -> original retrieval + rewritten retrieval
-       -> merge and deduplicate chunks
-       -> LLM re-ranking
-       -> final answer generation
-
-Gradio App
-    -> app.py
-       -> streaming chat experience
-       -> document upload/delete workflow
-       -> admin-protected document management
+```mermaid
+flowchart LR
+    A[knowledge-base/] --> B[src/ingest.py]
+    B --> C[Semantic Chunking\nvia OpenRouter]
+    C --> D[OpenAI Embeddings\ntext-embedding-3-large]
+    D --> E[(ChromaDB\nVector Store)]
 ```
 
 ### Request Flow
 
-```text
-User question
-    -> rewrite query
-    -> retrieve with original question
-    -> retrieve with rewritten question
-    -> merge results
-    -> rerank chunks with an LLM
-    -> build final context
-    -> generate answer
-    -> stream response in the UI
+```mermaid
+flowchart TD
+    Q[User Question] --> R[Rewrite Query]
+    R --> S1[Retrieve with\nOriginal Question]
+    R --> S2[Retrieve with\nRewritten Question]
+    S1 --> M[Merge & Deduplicate]
+    S2 --> M
+    M --> RK[LLM Re-Ranking]
+    RK --> CTX[Build Final Context\nTop-K Chunks]
+    CTX --> ANS[Generate Answer]
+    ANS --> UI[Stream Response\nin Gradio UI]
+```
+
+### Gradio App
+
+```mermaid
+flowchart LR
+    APP[app.py] --> CHAT[Streaming Chat]
+    APP --> UPLOAD[Document Upload]
+    APP --> DELETE[Document Delete]
+    APP --> ADMIN[Admin-Protected\nManagement]
 ```
 
 ## Advanced RAG vs LangChain
@@ -214,16 +205,70 @@ This was the key lesson from the project: retrieval quality improved most when I
 - The strongest improvements came from always rewriting the query, retrieving from both query versions, and reranking with richer chunk context.
 - In other words, the final system was not just built - it was tuned based on measurable benchmark feedback.
 
-## Recruiter-Relevant Skills Demonstrated
+## Prompt Engineering Details
 
-- Python LLM application development
-- Retrieval-Augmented Generation (RAG)
-- Prompt design for chunking, rewriting, and reranking
-- ChromaDB vector search
-- Gradio UI development
-- Document ingestion workflows
-- Evaluation-driven iteration
-- Comparative benchmarking against a baseline implementation
+This project relies on four specialized prompts, each designed for a different stage of the RAG pipeline. Every prompt was iterated based on evaluation feedback.
+
+### 1. Semantic Chunking Prompt (`src/ingest.py`)
+
+- **Pattern:** System-role instruction with structured JSON output
+- **Purpose:** Split raw documents into self-contained chunks, each with a `headline`, `summary`, and `original_text`
+- **Design choice:** Requiring a headline and summary alongside the original text means the embedding captures both a compact semantic description and the raw content, improving retrieval hit rate
+- **Temperature:** `0.3` — low creativity to keep chunking deterministic and reproducible
+
+### 2. Query Rewriting Prompt (`src/answer.py`)
+
+- **Pattern:** Single-turn user prompt with conversation history as context
+- **Purpose:** Rewrite the user's question into a search-optimized query before retrieval
+- **Design choice:** Always rewriting (not conditional) produced the largest single improvement in MRR during evaluation
+- **Temperature:** `0.3` — low variance to keep the rewritten query focused
+
+### 3. Re-Ranking Prompt (`src/answer.py`)
+
+- **Pattern:** System-role instruction with structured JSON output (`{"order": [...]}`)
+- **Purpose:** Re-order retrieved chunks by relevance before building the answer context
+- **Design choice:** Using structured JSON output instead of free-text ranking ensures reliable parsing and deterministic chunk ordering
+- **Temperature:** `0.1` — near-deterministic to keep the ranking stable across runs
+
+### 4. Answer Generation Prompt (`src/answer.py`)
+
+- **Pattern:** System-role prompt with grounded context injection
+- **Purpose:** Generate the final answer using only the provided context (grounding)
+- **Design choice:** Explicit grounding instruction ("answer only with information supported by the provided context") reduces hallucination and keeps answers verifiable
+- **Temperature:** `0.7` — moderate creativity for natural, readable answers
+
+### Prompt Techniques Used
+
+| Technique | Where Applied |
+|---|---|
+| System / role prompting | All four prompts |
+| Structured JSON output | Chunking prompt, re-ranking prompt |
+| Context grounding | Answer generation prompt |
+| Temperature tuning per task | `0.1` re-rank, `0.3` rewrite/chunk, `0.7` answer |
+| Conversation history injection | Query rewriting prompt |
+
+## Cost-Aware Model Selection
+
+| Task | Model | Rationale |
+|---|---|---|
+| Answer generation | `gpt-4.1` | Best quality for the final user-facing response |
+| Semantic chunking | `gpt-4.1` | Needs strong reasoning for accurate document splitting |
+| Query rewriting | `gpt-4.1-mini` | Simpler task, smaller model reduces cost without quality loss |
+| Re-ranking | `gpt-4.1-mini` | Ordering task with structured output, smaller model is sufficient |
+
+Using cheaper models for sub-tasks (rewrite, rerank) while reserving the strongest model for answer generation and chunking keeps API costs lower without sacrificing end-to-end quality.
+
+## Skills Demonstrated
+
+- **Prompt Engineering:** Designed and iterated 4 specialized prompts (chunking, rewriting, reranking, answer generation) using system/role patterns, structured JSON output, and per-task temperature tuning
+- **RAG Pipeline Development:** Built a custom retrieval pipeline with semantic chunking, multi-query retrieval, context management, and LLM re-ranking
+- **LangChain:** Built a separate baseline RAG implementation for framework comparison and fast prototyping
+- **Python & LLM APIs:** OpenAI-compatible API integration with streaming, Pydantic validation, and concurrent processing
+- **Vector Search:** ChromaDB for embedding storage and similarity retrieval with OpenAI `text-embedding-3-large`
+- **Context Management & Grounding:** Controlled context window size via `RETRIEVAL_K`/`FINAL_K` tuning, grounded answers to retrieved context only
+- **Cost Optimization:** Strategic model selection (stronger models for critical tasks, smaller models for sub-tasks) to reduce API cost
+- **Evaluation-Driven Iteration:** Used MRR, nDCG, keyword coverage, and LLM-judged answer quality to iteratively improve the system
+- **UI Development:** Gradio chat interface with streaming, document management, and admin-protected workflows
 
 ## Project Structure
 
@@ -329,6 +374,8 @@ python -m langchain_baseline.answer
 
 ## Example Questions
 
+The knowledge base contains fictional company data about products, employees, contracts, and company culture. Try questions like:
+
 - `What products does the company offer?`
 - `What is the company culture like?`
 - `Summarize the contracts-related information in the knowledge base.`
@@ -343,6 +390,13 @@ python -m langchain_baseline.answer
 ## Additional Comparison Notes
 
 See `docs/langchain-vs-advanced-rag.md` for a more explicit breakdown of the design trade-offs and evaluation story.
+
+## Lessons Learned
+
+- **Retrieval quality matters more than the answer model.** Switching from a basic similarity search to a multi-stage retrieval pipeline (rewrite → multi-query → rerank) had a much larger impact on answer quality than changing the LLM alone.
+- **Always rewrite the query.** Early versions used a conditional heuristic to decide when to rewrite. Removing the condition and always rewriting improved MRR consistently.
+- **Structured output makes prompts more reliable.** Using JSON schemas for chunking and re-ranking eliminated most parsing failures and made the pipeline more robust.
+- **Evaluation feedback drives better decisions than intuition.** Several design choices I expected to help (like aggressive top-K filtering) actually hurt quality. Only the benchmark showed this clearly.
 
 ## License
 
