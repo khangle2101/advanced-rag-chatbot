@@ -207,7 +207,7 @@ This was the key lesson from the project: retrieval quality improved most when I
 
 ## Prompt Engineering Details
 
-This project relies on four specialized prompts, each designed for a different stage of the RAG pipeline. Every prompt was iterated based on evaluation feedback.
+This project relies on four specialized prompts, each designed for a different stage of the RAG pipeline. The overall pipeline and retrieval strategy were iteratively improved based on evaluation metrics.
 
 ### 1. Semantic Chunking Prompt (`src/ingest.py`)
 
@@ -260,14 +260,14 @@ Using cheaper models for sub-tasks (rewrite, rerank) while reserving the stronge
 
 ## Skills Demonstrated
 
-- **Prompt Engineering:** Designed and iterated 4 specialized prompts (chunking, rewriting, reranking, answer generation) using system/role patterns, structured JSON output, and per-task temperature tuning
+- **Prompt Engineering:** Designed 4 specialized prompts (chunking, rewriting, reranking, answer generation) using system/role patterns, structured JSON output, and per-task temperature tuning
 - **RAG Pipeline Development:** Built a custom retrieval pipeline with semantic chunking, multi-query retrieval, context management, and LLM re-ranking
 - **LangChain:** Built a separate baseline RAG implementation for framework comparison and fast prototyping
 - **Python & LLM APIs:** OpenAI-compatible API integration with streaming, Pydantic validation, and concurrent processing
 - **Vector Search:** ChromaDB for embedding storage and similarity retrieval with OpenAI `text-embedding-3-large`
 - **Context Management & Grounding:** Controlled context window size via `RETRIEVAL_K`/`FINAL_K` tuning, grounded answers to retrieved context only
 - **Cost Optimization:** Strategic model selection (stronger models for critical tasks, smaller models for sub-tasks) to reduce API cost
-- **Evaluation-Driven Iteration:** Used MRR, nDCG, keyword coverage, and LLM-judged answer quality to iteratively improve the system
+- **Evaluation-Driven Pipeline Iteration:** Used MRR, nDCG, keyword coverage, and LLM-judged answer quality to iteratively improve retrieval strategy and pipeline configuration
 - **UI Development:** Gradio chat interface with streaming, document management, and admin-protected workflows
 
 ## Project Structure
